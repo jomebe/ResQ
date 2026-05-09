@@ -156,7 +156,8 @@ type Screen =
   | 'disaster'
   | 'guidance'
   | 'camera_loading'
-  | 'text_query';
+  | 'text_query'
+  | 'settings';
 type DisasterPickerSource = 'home' | 'guidance';
 type GuidanceBackTarget = 'home' | 'text_query';
 type QuickTagValue = DisasterId | 'emergency';
@@ -166,6 +167,9 @@ type AnalysisResult = {
   disasterId: DisasterId;
   warning?: string;
 };
+
+type Language = 'ko' | 'en' | 'ja';
+type VoiceType = 'natural' | 'assured' | 'brisk';
 
 // 오프라인 로컬 모델: 사용자 입력(텍스트)을 분석해 재난 타입 판단
 async function analyzeVoiceInputLocally(userInput: string): Promise<AnalysisResult> {
@@ -342,6 +346,9 @@ export default function App() {
   const [guidanceBackTarget, setGuidanceBackTarget] = useState<GuidanceBackTarget>('home');
   const [textQuestion, setTextQuestion] = useState('');
   const [selectedQuickTagId, setSelectedQuickTagId] = useState<string>(TEXT_QUICK_TAGS[0].id);
+  const [language, setLanguage] = useState<Language>('ko');
+  const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [voiceType, setVoiceType] = useState<VoiceType>('natural');
 
   useEffect(() => {
     if (screen !== 'onboard') return;
@@ -423,6 +430,19 @@ export default function App() {
             setAnalysisWarning(result.warning);
             setGuidanceBackTarget('text_query');
             setScreen('guidance');
+          }}
+        />
+      ) : screen === 'settings' ? (
+        <SettingsScreen
+          language={language}
+          ttsEnabled={ttsEnabled}
+          voiceType={voiceType}
+          onLanguageChange={setLanguage}
+          onTtsToggle={setTtsEnabled}
+          onVoiceChange={setVoiceType}
+          onBack={() => {
+            setStatusText('오프라인');
+            setScreen('home');
           }}
         />
       ) : (
@@ -627,6 +647,10 @@ function HomeScreen({
                     }
                     if (item.label === '텍스트 질문') {
                       onOpenTextQuestion();
+                    }
+                    if (item.label === '설정') {
+                      setStatusText('오프라인');
+                      setScreen('settings');
                     }
                   }}
                 >
@@ -895,6 +919,143 @@ function TextQuestionScreen({
     </LinearGradient>
   );
 }
+
+function SettingsScreen({
+  language,
+  ttsEnabled,
+  voiceType,
+  onLanguageChange,
+  onTtsToggle,
+  onVoiceChange,
+  onBack,
+}: {
+  language: Language;
+  ttsEnabled: boolean;
+  voiceType: VoiceType;
+  onLanguageChange: (lang: Language) => void;
+  onTtsToggle: (enabled: boolean) => void;
+  onVoiceChange: (voice: VoiceType) => void;
+  onBack: () => void;
+}) {
+  return (
+    <LinearGradient colors={['#0a0a0a', '#141414', '#0b0b0b']} style={styles.screen}>
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.header}>
+          <Pressable onPress={onBack} style={styles.headerBack}>
+            <Feather name="arrow-left" size={20} color="#fff" />
+          </Pressable>
+          <Text style={styles.headerTitle}>설정</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <ScrollView style={styles.settingsScroll} showsVerticalScrollIndicator={false}>
+          {/* 언어 기본값 */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>언어 기본값</Text>
+            <Text style={styles.settingsSectionDesc}>현재 기본 언어를 선택하세요.</Text>
+            <View style={styles.settingsButtonRow}>
+              <Pressable
+                style={[styles.settingsButton, language === 'ko' && styles.settingsButtonActive]}
+                onPress={() => onLanguageChange('ko')}
+              >
+                <Text style={[styles.settingsButtonText, language === 'ko' && styles.settingsButtonTextActive]}>한국어</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.settingsButton, language === 'en' && styles.settingsButtonActive]}
+                onPress={() => onLanguageChange('en')}
+              >
+                <Text style={[styles.settingsButtonText, language === 'en' && styles.settingsButtonTextActive]}>영어</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.settingsButton, language === 'ja' && styles.settingsButtonActive]}
+                onPress={() => onLanguageChange('ja')}
+              >
+                <Text style={[styles.settingsButtonText, language === 'ja' && styles.settingsButtonTextActive]}>일본어</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* 음성 TTS */}
+          <View style={styles.settingsSection}>
+            <View style={styles.settingsTitleRow}>
+              <View>
+                <Text style={styles.settingsSectionTitle}>음성 TTS</Text>
+                <Text style={styles.settingsSectionDesc}>음성 안내</Text>
+              </View>
+              <Pressable
+                onPress={() => onTtsToggle(!ttsEnabled)}
+                style={[styles.toggleSwitch, ttsEnabled && styles.toggleSwitchActive]}
+              >
+                <View style={[styles.toggleThumb, ttsEnabled && styles.toggleThumbActive]} />
+              </Pressable>
+            </View>
+
+            {ttsEnabled && (
+              <>
+                <Text style={[styles.settingsSectionDesc, { marginTop: 12 }]}>음성 안내 톤을 선택합니다.</Text>
+                <View style={styles.settingsButtonRow}>
+                  <Pressable
+                    style={[styles.settingsButton, voiceType === 'natural' && styles.settingsButtonActive]}
+                    onPress={() => onVoiceChange('natural')}
+                  >
+                    <Text style={[styles.settingsButtonText, voiceType === 'natural' && styles.settingsButtonTextActive]}>느낌</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.settingsButton, voiceType === 'assured' && styles.settingsButtonActive]}
+                    onPress={() => onVoiceChange('assured')}
+                  >
+                    <Text style={[styles.settingsButtonText, voiceType === 'assured' && styles.settingsButtonTextActive]}>보증</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.settingsButton, voiceType === 'brisk' && styles.settingsButtonActive]}
+                    onPress={() => onVoiceChange('brisk')}
+                  >
+                    <Text style={[styles.settingsButtonText, voiceType === 'brisk' && styles.settingsButtonTextActive]}>뻐금</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+
+          {/* 오프라인 데이터 */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>오프라인 데이터 (매뉴얼) 상태</Text>
+            
+            <View style={styles.offlineDataBox}>
+              <View style={styles.offlineDataRow}>
+                <Text style={styles.offlineDataLabel}>다운로드 됨</Text>
+                <Text style={styles.offlineDataValue}>✓</Text>
+              </View>
+              <View style={styles.offlineDataRow}>
+                <Text style={styles.offlineDataLabel}>데이터 용량</Text>
+                <Text style={styles.offlineDataValue}>67MB</Text>
+              </View>
+              <View style={styles.offlineDataRow}>
+                <Text style={styles.offlineDataLabel}>마지막 업데이트</Text>
+                <Text style={styles.offlineDataValue}>2025-05-09</Text>
+              </View>
+            </View>
+
+            <Pressable style={styles.updateButton}>
+              <Text style={styles.updateButtonText}>업데이트 확인</Text>
+            </Pressable>
+          </View>
+
+          {/* 주의 메시지 */}
+          <View style={styles.warningBox}>
+            <Text style={styles.warningTitle}>안내</Text>
+            <Text style={styles.warningText}>
+              오프라인 상태에서도 모든 기능 사용 가능합니다. 앱에서는 시더 정 완 정보를 제공합니다 수 없습니다.
+            </Text>
+          </View>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+}
+
 const styles = StyleSheet.create({
   appRoot: {
     flex: 1,
@@ -1349,5 +1510,139 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 30,
     fontFamily: 'Pretendard-Bold',
+  },
+  // Settings Screen Styles
+  headerSpacer: {
+    width: 44,
+  },
+  settingsScroll: {
+    flex: 1,
+  },
+  settingsSection: {
+    marginBottom: 28,
+    paddingHorizontal: 16,
+  },
+  settingsSectionTitle: {
+    fontSize: 16,
+    fontFamily: 'Pretendard-SemiBold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  settingsSectionDesc: {
+    fontSize: 12,
+    fontFamily: 'Pretendard-Regular',
+    color: '#999',
+    marginBottom: 12,
+  },
+  settingsTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  settingsButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  settingsButton: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#1b1b1b',
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  settingsButtonActive: {
+    backgroundColor: '#e53935',
+    borderColor: '#e53935',
+  },
+  settingsButtonText: {
+    fontSize: 13,
+    fontFamily: 'Pretendard-Regular',
+    color: '#ccc',
+  },
+  settingsButtonTextActive: {
+    color: '#fff',
+    fontFamily: 'Pretendard-SemiBold',
+  },
+  toggleSwitch: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleSwitchActive: {
+    backgroundColor: '#e53935',
+  },
+  toggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#666',
+  },
+  toggleThumbActive: {
+    backgroundColor: '#fff',
+    alignSelf: 'flex-end',
+  },
+  offlineDataBox: {
+    backgroundColor: '#1b1b1b',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  offlineDataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a2a',
+  },
+  offlineDataLabel: {
+    fontSize: 13,
+    fontFamily: 'Pretendard-Regular',
+    color: '#ccc',
+  },
+  offlineDataValue: {
+    fontSize: 13,
+    fontFamily: 'Pretendard-SemiBold',
+    color: '#fff',
+  },
+  updateButton: {
+    backgroundColor: '#1b1b1b',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  updateButtonText: {
+    fontSize: 13,
+    fontFamily: 'Pretendard-SemiBold',
+    color: '#ccc',
+  },
+  warningBox: {
+    backgroundColor: 'rgba(229, 57, 53, 0.1)',
+    borderWidth: 1,
+    borderColor: '#e53935',
+    borderRadius: 8,
+    padding: 12,
+    marginHorizontal: 16,
+  },
+  warningTitle: {
+    fontSize: 13,
+    fontFamily: 'Pretendard-SemiBold',
+    color: '#e53935',
+    marginBottom: 6,
+  },
+  warningText: {
+    fontSize: 12,
+    fontFamily: 'Pretendard-Regular',
+    color: '#e53935',
+    lineHeight: 18,
   },
 });
