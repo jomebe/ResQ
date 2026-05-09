@@ -167,29 +167,55 @@ type AnalysisResult = {
   warning?: string;
 };
 
-// LiteRT-LM 모델 API 호출
-async function callLiteRTModel(userInput: string): Promise<string> {
-  try {
-    // API 엔드포인트 설정 (사용자 환경에 맞게 수정 필요)
-    const apiEndpoint = 'https://your-litert-api-endpoint.com/api/query';
-    const response = await fetch(apiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ input: userInput }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data.response || data.output || '응답을 받을 수 없습니다.';
-  } catch (error) {
-    console.error('LiteRT Model Error:', error);
-    return `오류: 모델 응답 실패. 오프라인 상태이거나 API가 응답하지 않습니다.`;
+// 오프라인 로컬 모델: 사용자 입력(텍스트)을 분석해 재난 타입 판단
+async function analyzeVoiceInputLocally(userInput: string): Promise<AnalysisResult> {
+  const normalized = userInput.toLowerCase();
+
+  // 지진 관련 키워드
+  if (['지진', '흔들림', '진동', 'earthquake', 'shake'].some(k => normalized.includes(k))) {
+    return {
+      disasterId: 'earthquake',
+      warning: '책상 아래로 숨고 문을 열어두세요. 흔들림이 멈출 때까지 자세를 유지하세요.',
+    };
   }
+
+  // 화재 관련 키워드
+  if (['화재', '불', '연기', 'fire', 'smoke'].some(k => normalized.includes(k))) {
+    return {
+      disasterId: 'fire',
+      warning: '연기 유입을 막고 낮은 자세로 비상구 방향으로 이동하세요.',
+    };
+  }
+
+  // 홍수/침수 관련 키워드
+  if (['홍수', '침수', '물', 'flood', 'water'].some(k => normalized.includes(k))) {
+    return {
+      disasterId: 'flood',
+      warning: '급류 구간과 맨홀 주변을 피하고 높은 위치로 이동하세요.',
+    };
+  }
+
+  // 정전 관련 키워드
+  if (['정전', '정격', '불이', 'blackout', 'power'].some(k => normalized.includes(k))) {
+    return {
+      disasterId: 'blackout',
+      warning: '보안등과 휴대폰 손전등을 켜고 천천히 움직이세요.',
+    };
+  }
+
+  // 쓰나미/해일 관련 키워드
+  if (['쓰나미', '해일', 'tsunami', 'wave'].some(k => normalized.includes(k))) {
+    return {
+      disasterId: 'tsunami',
+      warning: '해안 주민은 즉시 높은 지대로 대피하세요.',
+    };
+  }
+
+  // 기본값: 응급
+  return {
+    disasterId: 'emergency',
+    warning: '상황이 위험하다고 판단되면 즉시 신고하세요.',
+  };
 }
 
 async function analyzeCapturedImage(uri: string): Promise<AnalysisResult> {
@@ -544,11 +570,11 @@ function HomeScreen({
                 // 듣는중 상태에서 중단
                 setListening(false);
               } else {
-                // 시작: 모델 호출
+                // 시작: 로컬 모델로 분석 (테스트용 예시 입력)
                 setListening(true);
-                const response = await callLiteRTModel('사용자 음성 입력 (테스트)');
-                // 응답을 라벨에 표시하거나 별도 화면으로 처리
-                console.log('LiteRT 응답:', response);
+                const testInput = '화재가 발생했습니다';
+                const result = await analyzeVoiceInputLocally(testInput);
+                console.log('분석 결과:', result);
                 setListening(false);
               }
             }}
