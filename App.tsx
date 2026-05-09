@@ -103,7 +103,6 @@ function HomeScreen() {
     []
   );
   const itemAnim = useRef(items.map(() => new Animated.Value(0))).current;
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -162,7 +161,6 @@ function HomeScreen() {
         <View style={styles.actions}>
           {items.map((item, index) => {
             const anim = itemAnim[index];
-            const isActive = selectedIndex === index;
             return (
               <Animated.View
                 key={item.label}
@@ -178,38 +176,21 @@ function HomeScreen() {
                   ],
                 }}
               >
-                <Pressable
-                  onPress={() =>
-                    setSelectedIndex((prev) => (prev === index ? null : index))
-                  }
-                >
-                  <View
-                    style={[
-                      styles.actionButton,
-                      isActive && styles.actionButtonActive,
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.actionIcon,
-                        isActive && styles.actionIconActive,
-                      ]}
-                    >
-                      <Feather
-                        name={item.icon as never}
-                        size={18}
-                        color={isActive ? '#fff' : '#d4d4d4'}
-                      />
+                <Pressable onPress={() => {}}>
+                  {({ pressed }) => (
+                    <View style={styles.actionButton}>
+                      <View style={styles.actionIcon}>
+                        <Feather
+                          name={item.icon as never}
+                          size={18}
+                          color={pressed ? '#ffffff' : '#d4d4d4'}
+                        />
+                      </View>
+                      <Text style={[styles.actionLabel, pressed && styles.actionLabelActive]}>
+                        {item.label}
+                      </Text>
                     </View>
-                    <Text
-                      style={[
-                        styles.actionLabel,
-                        isActive && styles.actionLabelActive,
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </View>
+                  )}
                 </Pressable>
               </Animated.View>
             );
@@ -356,13 +337,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#e6e6e6',
     fontFamily: 'Pretendard-Regular',
-  },
-  actionButtonActive: {
-    backgroundColor: '#3a1414',
-    borderColor: '#4b1515',
-  },
-  actionIconActive: {
-    backgroundColor: '#7a2b2b',
   },
   actionLabelActive: {
     color: '#ffffff',
