@@ -167,6 +167,31 @@ type AnalysisResult = {
   warning?: string;
 };
 
+// LiteRT-LM 모델 API 호출
+async function callLiteRTModel(userInput: string): Promise<string> {
+  try {
+    // API 엔드포인트 설정 (사용자 환경에 맞게 수정 필요)
+    const apiEndpoint = 'https://your-litert-api-endpoint.com/api/query';
+    const response = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ input: userInput }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.response || data.output || '응답을 받을 수 없습니다.';
+  } catch (error) {
+    console.error('LiteRT Model Error:', error);
+    return `오류: 모델 응답 실패. 오프라인 상태이거나 API가 응답하지 않습니다.`;
+  }
+}
+
 async function analyzeCapturedImage(uri: string): Promise<AnalysisResult> {
   const normalizedUri = uri.toLowerCase();
   const matchingRules: Array<{ keywords: string[]; disasterId: DisasterId; warning?: string }> = [
@@ -513,8 +538,22 @@ function HomeScreen({
         </View>
 
         <View style={styles.centerStack}>
-          <Pressable onPress={() => setListening((v) => !v)} style={{ alignItems: 'center' }}>
-            <Animated.View style={{ transform: [{ scale: micScale }] }}>
+          <Pressable
+            onPress={async () => {
+              if (listening) {
+                // 듣는중 상태에서 중단
+                setListening(false);
+              } else {
+                // 시작: 모델 호출
+                setListening(true);
+                const response = await callLiteRTModel('사용자 음성 입력 (테스트)');
+                // 응답을 라벨에 표시하거나 별도 화면으로 처리
+                console.log('LiteRT 응답:', response);
+                setListening(false);
+              }
+            }}
+            style={{ alignItems: 'center' }}
+          >
               <View style={styles.micShadow} />
               <View style={styles.micButton}>
                 <Animated.View
