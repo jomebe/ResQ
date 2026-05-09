@@ -411,14 +411,13 @@ export default function App() {
             setStatusText('오프라인');
             setScreen('home');
           }}
-          onSubmit={() => {
+          onSubmit={async () => {
             const trimmed = textQuestion.trim();
             if (!trimmed) {
               Alert.alert('입력 필요', '상황을 입력해 주세요.');
               return;
             }
-            const selectedTag = TEXT_QUICK_TAGS.find((tag) => tag.id === selectedQuickTagId);
-            const result = analyzeTextQuery(trimmed, selectedTag?.value ?? 'emergency');
+            const result = await analyzeVoiceInputLocally(trimmed);
             setSelectedDisasterId(result.disasterId);
             setGuidanceTitle('텍스트 질문');
             setAnalysisWarning(result.warning);
@@ -855,7 +854,7 @@ function TextQuestionScreen({
           </Pressable>
           <Text style={styles.headerTitle}>텍스트 질문</Text>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>온라인</Text>
+            <Text style={styles.badgeText}>오프라인</Text>
           </View>
         </View>
 
