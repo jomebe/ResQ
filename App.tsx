@@ -76,7 +76,6 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
         colors={['#0a0a0a', '#141414', '#0b0b0b']}
         style={styles.screen}
       >
-        <View style={styles.glow} />
         <Animated.View
           style={[
             styles.onboardContent,
