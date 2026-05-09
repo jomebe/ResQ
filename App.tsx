@@ -13,11 +13,11 @@ import {
   View,
 } from 'react-native';
 
-type Screen = 'onboard' | 'home';
+type Screen = 'onboard' | 'home' | 'disaster';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-type Screen = 'onboard' | 'home' | 'disaster';
+    'Pretendard-Regular': require('pretendard/dist/public/static/Pretendard-Regular.otf'),
     'Pretendard-SemiBold': require('pretendard/dist/public/static/Pretendard-SemiBold.otf'),
     'Pretendard-Bold': require('pretendard/dist/public/static/Pretendard-Bold.otf'),
   });
