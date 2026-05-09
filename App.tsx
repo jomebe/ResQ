@@ -81,11 +81,13 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
             styles.onboardContent,
             { opacity: fade, transform: [{ translateY: lift }] },
           ]}
-        >
-          <Text style={styles.brandTitle}>ResQ</Text>
-          <Text style={styles.brandSubtitle}>오프라인 재난코치</Text>
-        </Animated.View>
-      </LinearGradient>
+            {screen === 'onboard' ? (
+              <OnboardingScreen onDone={() => setScreen('home')} />
+            ) : screen === 'home' ? (
+              <HomeScreen onNavigate={(s: Screen) => setScreen(s)} />
+            ) : (
+              <DisasterScreen onBack={() => setScreen('home')} />
+            )}
     </Pressable>
   );
 }
@@ -216,6 +218,54 @@ function HomeScreen() {
   );
 }
 
+function DisasterScreen({ onBack }: { onBack: () => void }) {
+  const types = Array.from({ length: 8 }).map((_, i) => ({
+    key: `t${i}`,
+    label: '지진',
+    desc: '지진 발생시 행동요령\n대피 방법 등',
+  }));
+
+  return (
+    <LinearGradient colors={['#0a0a0a', '#141414', '#0b0b0b']} style={styles.screen}>
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.header}>
+          <Pressable onPress={onBack} style={styles.headerBack}>
+            <Feather name="arrow-left" size={20} color="#fff" />
+          </Pressable>
+          <Text style={styles.headerTitle}>재난 유형 선택</Text>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>오프라인</Text>
+          </View>
+        </View>
+
+        <Text style={styles.disasterIntroTitle}>어떤 재난에 대한 정보가 필요하신가요?</Text>
+        <Text style={styles.disasterIntroSubtitle}>재난 유형을 선택해주세요.</Text>
+
+        <View style={styles.disasterGrid}>
+          {types.map((t) => (
+            <Pressable key={t.key} style={styles.disasterCard} onPress={() => {}}>
+              <View style={styles.disasterCardIcon}>
+                <Feather name="home" size={18} color="#fff" />
+              </View>
+              <Text style={styles.disasterCardTitle}>{t.label}</Text>
+              <Text style={styles.disasterCardDesc}>{t.desc}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Pressable style={styles.bottomBanner} onPress={() => {}}>
+          <View style={styles.bottomBannerIcon}>
+            <Feather name="volume-2" size={18} color="#ff5252" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bottomBannerTitle}>원하는 항목이 없나요?</Text>
+            <Text style={styles.bottomBannerSubtitle}>음성이나 텍스트로 직접 질문해보세요</Text>
+          </View>
+        </Pressable>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+}
 const styles = StyleSheet.create({
   appRoot: {
     flex: 1,
@@ -355,5 +405,92 @@ const styles = StyleSheet.create({
   },
   actionLabelActive: {
     color: '#ffffff',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  headerBack: {
+    padding: 8,
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 16,
+    fontFamily: 'Pretendard-SemiBold',
+    color: '#fff',
+  },
+  disasterIntroTitle: {
+    fontSize: 20,
+    fontFamily: 'Pretendard-Bold',
+    color: '#fff',
+    marginBottom: 6,
+  },
+  disasterIntroSubtitle: {
+    fontSize: 13,
+    fontFamily: 'Pretendard-Regular',
+    color: '#9c9c9c',
+    marginBottom: 12,
+  },
+  disasterGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  disasterCard: {
+    width: '48%',
+    backgroundColor: '#1b1b1b',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#242424',
+  },
+  disasterCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#262626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  disasterCardTitle: {
+    fontSize: 16,
+    fontFamily: 'Pretendard-SemiBold',
+    color: '#e6e6e6',
+  },
+  disasterCardDesc: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#9c9c9c',
+    fontFamily: 'Pretendard-Regular',
+  },
+  bottomBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1b1b1b',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+  },
+  bottomBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#2b2b2b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  bottomBannerTitle: {
+    color: '#fff',
+    fontFamily: 'Pretendard-SemiBold',
+  },
+  bottomBannerSubtitle: {
+    color: '#c7c7c7',
+    fontFamily: 'Pretendard-Regular',
   },
 });
