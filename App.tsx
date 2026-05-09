@@ -580,6 +580,7 @@ function HomeScreen({
             }}
             style={{ alignItems: 'center' }}
           >
+            <Animated.View style={{ transform: [{ scale: micScale }] }}>
               <View style={styles.micShadow} />
               <View style={styles.micButton}>
                 <Animated.View
