@@ -81,13 +81,11 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
             styles.onboardContent,
             { opacity: fade, transform: [{ translateY: lift }] },
           ]}
-            {screen === 'onboard' ? (
-              <OnboardingScreen onDone={() => setScreen('home')} />
-            ) : screen === 'home' ? (
-              <HomeScreen onNavigate={(s: Screen) => setScreen(s)} />
-            ) : (
-              <DisasterScreen onBack={() => setScreen('home')} />
-            )}
+        >
+          <Text style={styles.brandTitle}>ResQ</Text>
+          <Text style={styles.brandSubtitle}>오프라인 재난코치</Text>
+        </Animated.View>
+      </LinearGradient>
     </Pressable>
   );
 }
