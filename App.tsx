@@ -17,7 +17,7 @@ type Screen = 'onboard' | 'home';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    'Pretendard-Regular': require('pretendard/dist/public/static/Pretendard-Regular.otf'),
+type Screen = 'onboard' | 'home' | 'disaster';
     'Pretendard-SemiBold': require('pretendard/dist/public/static/Pretendard-SemiBold.otf'),
     'Pretendard-Bold': require('pretendard/dist/public/static/Pretendard-Bold.otf'),
   });
@@ -96,7 +96,7 @@ function HomeScreen() {
   const [listening, setListening] = useState(false);
   const items = useMemo(
     () => [
-      { icon: 'grid', label: '재난 유형 선택' },
+function HomeScreen({ onNavigate }: { onNavigate?: (s: Screen) => void }) {
       { icon: 'camera', label: '안내문 촬영' },
       { icon: 'edit-3', label: '텍스트 질문' },
       { icon: 'settings', label: '설정' },
