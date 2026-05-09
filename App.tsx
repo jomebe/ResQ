@@ -16,15 +16,22 @@ import {
 type Screen = 'onboard' | 'home';
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('onboard');
-
   const [fontsLoaded] = useFonts({
     'Pretendard-Regular': require('pretendard/dist/public/static/Pretendard-Regular.otf'),
     'Pretendard-SemiBold': require('pretendard/dist/public/static/Pretendard-SemiBold.otf'),
     'Pretendard-Bold': require('pretendard/dist/public/static/Pretendard-Bold.otf'),
   });
 
-  if (!fontsLoaded) return null;
+  // Keep font hook at the top to preserve hook call order across renders.
+  // Declare other hooks immediately after so the hook call order is stable
+  // across renders even during font loading.
+  const [screen, setScreen] = useState<Screen>('onboard');
+
+  // Show a simple dark loading view until fonts are ready to avoid visual
+  // flashes. Hooks are already called above so order is stable.
+  if (!fontsLoaded) {
+    return <View style={{ flex: 1, backgroundColor: '#0a0a0a' }} />;
+  }
 
   useEffect(() => {
     if (screen !== 'onboard') return;
