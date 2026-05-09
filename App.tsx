@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useFonts } from 'expo-font';
 import {
   Animated,
   Platform,
@@ -16,6 +17,14 @@ type Screen = 'onboard' | 'home';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('onboard');
+
+  const [fontsLoaded] = useFonts({
+    'Pretendard-Regular': require('pretendard/dist/public/static/Pretendard-Regular.otf'),
+    'Pretendard-SemiBold': require('pretendard/dist/public/static/Pretendard-SemiBold.otf'),
+    'Pretendard-Bold': require('pretendard/dist/public/static/Pretendard-Bold.otf'),
+  });
+
+  if (!fontsLoaded) return null;
 
   useEffect(() => {
     if (screen !== 'onboard') return;
@@ -208,16 +217,16 @@ const styles = StyleSheet.create({
   },
   brandTitle: {
     fontSize: 44,
-    fontWeight: '800',
-    fontFamily: Platform.select({ ios: 'AvenirNext-Heavy', android: 'sans-serif-condensed' }),
+    fontFamily: 'Pretendard-Bold',
     letterSpacing: 1.2,
-    color: '#e53935',
+    color: '#E53935',
   },
   brandSubtitle: {
     marginTop: 8,
     fontSize: 16,
     color: '#c7c7c7',
     letterSpacing: 0.3,
+    fontFamily: 'Pretendard-Regular',
   },
   topRow: {
     flexDirection: 'row',
@@ -226,9 +235,8 @@ const styles = StyleSheet.create({
   },
   brandSmall: {
     fontSize: 22,
-    fontWeight: '700',
-    fontFamily: Platform.select({ ios: 'AvenirNext-DemiBold', android: 'sans-serif-condensed' }),
-    color: '#e53935',
+    fontFamily: 'Pretendard-SemiBold',
+    color: '#E53935',
   },
   badge: {
     borderRadius: 999,
@@ -241,6 +249,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     color: '#9c9c9c',
+    fontFamily: 'Pretendard-Regular',
   },
   centerStack: {
     alignItems: 'center',
@@ -282,7 +291,7 @@ const styles = StyleSheet.create({
   micLabel: {
     marginTop: 18,
     fontSize: 16,
-    fontFamily: Platform.select({ ios: 'AvenirNext-Medium', android: 'sans-serif-condensed' }),
+    fontFamily: 'Pretendard-Regular',
     color: '#cfcfcf',
   },
   actions: {
@@ -311,5 +320,6 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 15,
     color: '#e6e6e6',
+    fontFamily: 'Pretendard-Regular',
   },
 });
