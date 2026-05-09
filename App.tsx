@@ -93,6 +93,7 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
 function HomeScreen() {
   const micScale = useRef(new Animated.Value(0.92)).current;
   const micGlow = useRef(new Animated.Value(0)).current;
+  const [listening, setListening] = useState(false);
   const items = useMemo(
     () => [
       { icon: 'grid', label: '재난 유형 선택' },
@@ -129,6 +130,14 @@ function HomeScreen() {
     ).start();
   }, [itemAnim, micGlow, micScale]);
 
+  useEffect(() => {
+    Animated.spring(micScale, {
+      toValue: listening ? 1.08 : 1,
+      useNativeDriver: true,
+      friction: 5,
+    }).start();
+  }, [listening, micScale]);
+
   return (
     <LinearGradient
       colors={['#0a0a0a', '#121212', '#0d0d0d']}
@@ -143,19 +152,21 @@ function HomeScreen() {
         </View>
 
         <View style={styles.centerStack}>
-          <Animated.View style={{ transform: [{ scale: micScale }] }}>
-            <View style={styles.micShadow} />
-            <View style={styles.micButton}>
-              <Animated.View
-                style={[
-                  styles.micGlow,
-                  { opacity: micGlow, transform: [{ scale: micGlow }] },
-                ]}
-              />
-              <Feather name="mic" size={88} color="#fff" />
-            </View>
-          </Animated.View>
-          <Text style={styles.micLabel}>음성 질문 시작하기</Text>
+          <Pressable onPress={() => setListening((v) => !v)} style={{ alignItems: 'center' }}>
+            <Animated.View style={{ transform: [{ scale: micScale }] }}>
+              <View style={styles.micShadow} />
+              <View style={styles.micButton}>
+                <Animated.View
+                  style={[
+                    styles.micGlow,
+                    { opacity: micGlow, transform: [{ scale: micGlow }] },
+                  ]}
+                />
+                <Feather name="mic" size={88} color="#fff" />
+              </View>
+            </Animated.View>
+          </Pressable>
+          <Text style={styles.micLabel}>{listening ? '듣는중..' : '음성 질문 시작하기'}</Text>
         </View>
 
         <View style={styles.actions}>
