@@ -90,13 +90,13 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
-function HomeScreen() {
+function HomeScreen({ onNavigate }: { onNavigate?: (s: Screen) => void }) {
   const micScale = useRef(new Animated.Value(0.92)).current;
   const micGlow = useRef(new Animated.Value(0)).current;
   const [listening, setListening] = useState(false);
   const items = useMemo(
     () => [
-function HomeScreen({ onNavigate }: { onNavigate?: (s: Screen) => void }) {
+      { icon: 'grid', label: '재난 유형 선택' },
       { icon: 'camera', label: '안내문 촬영' },
       { icon: 'edit-3', label: '텍스트 질문' },
       { icon: 'settings', label: '설정' },
@@ -191,7 +191,13 @@ function HomeScreen({ onNavigate }: { onNavigate?: (s: Screen) => void }) {
                   ],
                 }}
               >
-                <Pressable onPress={() => {}}>
+                <Pressable
+                  onPress={() => {
+                    if (item.label === '재난 유형 선택') {
+                      onNavigate?.('disaster');
+                    }
+                  }}
+                >
                   {({ pressed }) => (
                     <View style={styles.actionButton}>
                       <View style={styles.actionIcon}>
