@@ -162,7 +162,11 @@ function HomeScreen() {
                     { opacity: micGlow, transform: [{ scale: micGlow }] },
                   ]}
                 />
-                <Feather name="mic" size={88} color="#fff" />
+                {listening ? (
+                  <Feather name="activity" size={88} color="#fff" />
+                ) : (
+                  <Feather name="mic" size={88} color="#fff" />
+                )}
               </View>
             </Animated.View>
           </Pressable>
