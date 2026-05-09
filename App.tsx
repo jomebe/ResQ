@@ -27,17 +27,17 @@ export default function App() {
   // across renders even during font loading.
   const [screen, setScreen] = useState<Screen>('onboard');
 
-  // Show a simple dark loading view until fonts are ready to avoid visual
-  // flashes. Hooks are already called above so order is stable.
-  if (!fontsLoaded) {
-    return <View style={{ flex: 1, backgroundColor: '#0a0a0a' }} />;
-  }
-
   useEffect(() => {
     if (screen !== 'onboard') return;
     const timer = setTimeout(() => setScreen('home'), 1600);
     return () => clearTimeout(timer);
   }, [screen]);
+
+  // Show a simple dark loading view until fonts are ready to avoid visual
+  // flashes. Hooks are already called above so order is stable.
+  if (!fontsLoaded) {
+    return <View style={{ flex: 1, backgroundColor: '#0a0a0a' }} />;
+  }
 
   return (
     <View style={styles.appRoot}>
