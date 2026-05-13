@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.camera2.CameraAccessException
+import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -418,6 +420,7 @@ fun ResQApp() {
     val offlineLlm = remember { OfflineLlmManager(context) }
     val offlineState by offlineLlm.state.collectAsState()
     val voiceController = remember { VoiceInputController(context) }
+    val torchController = remember { TorchController(context) }
 
     var screen by remember { mutableStateOf(Screen.Onboard) }
     var selectedDisasterId by remember { mutableStateOf(DisasterId.Earthquake) }
@@ -439,7 +442,23 @@ fun ResQApp() {
 
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var pendingCameraLaunch by remember { mutableStateOf(false) }
+    var pendingTorchToggle by remember { mutableStateOf(false) }
     var pendingMicLaunch by remember { mutableStateOf(false) }
+    var isTorchOn by remember { mutableStateOf(false) }
+
+    fun toggleTorch() {
+        try {
+            if (!torchController.hasFlashlight()) {
+                alertState = AlertState("손전등 없음", "이 기기에서 손전등을 사용할 수 없습니다.")
+                return
+            }
+            val next = !isTorchOn
+            torchController.setTorchEnabled(next)
+            isTorchOn = next
+        } catch (e: Exception) {
+            alertState = AlertState("손전등 오류", e.message ?: "손전등을 전환하지 못했습니다.")
+        }
+    }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -476,13 +495,32 @@ fun ResQApp() {
         if (!granted) {
             alertState = AlertState("권한 필요", "카메라 권한이 필요합니다.")
             pendingCameraLaunch = false
+            pendingTorchToggle = false
             return@rememberLauncherForActivityResult
+        }
+        if (pendingTorchToggle) {
+            pendingTorchToggle = false
+            toggleTorch()
         }
         if (pendingCameraLaunch) {
             pendingCameraLaunch = false
             val uri = createCameraUri(context)
             pendingCameraUri = uri
             cameraLauncher.launch(uri)
+        }
+    }
+
+    fun requestTorchToggle() {
+        val permissionGranted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (permissionGranted) {
+            toggleTorch()
+        } else {
+            pendingTorchToggle = true
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
@@ -546,6 +584,7 @@ fun ResQApp() {
     DisposableEffect(Unit) {
         onDispose {
             voiceController.destroy()
+            runCatching { torchController.setTorchEnabled(false) }
             offlineLlm.close()
         }
     }
@@ -614,6 +653,8 @@ fun ResQApp() {
                     statusText = "오프라인"
                     screen = Screen.TextQuery
                 },
+                isTorchOn = isTorchOn,
+                onToggleTorch = { requestTorchToggle() },
                 onOpenSettings = {
                     statusText = "오프라인"
                     screen = Screen.Settings
@@ -719,6 +760,7 @@ fun ResQApp() {
                 title = guidanceTitle,
                 statusText = statusText,
                 warning = analysisWarning,
+                isTorchOn = isTorchOn,
                 onBack = {
                     if (guidanceBackTarget == "text_query") {
                         screen = Screen.TextQuery
@@ -735,7 +777,8 @@ fun ResQApp() {
                     guidanceTitle = null
                     analysisWarning = null
                     screen = Screen.Disaster
-                }
+                },
+                onToggleTorch = { requestTorchToggle() }
             )
         }
 
@@ -825,6 +868,35 @@ private fun createCameraUri(context: Context): Uri {
         "${context.packageName}.fileprovider",
         imageFile
     )
+}
+
+private class TorchController(private val context: Context) {
+    private val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+
+    fun hasFlashlight(): Boolean {
+        return context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH) &&
+            findTorchCameraId() != null
+    }
+
+    fun setTorchEnabled(enabled: Boolean) {
+        val cameraId = findTorchCameraId()
+            ?: throw IllegalStateException("사용 가능한 손전등 카메라가 없습니다.")
+
+        try {
+            cameraManager.setTorchMode(cameraId, enabled)
+        } catch (e: CameraAccessException) {
+            throw IllegalStateException("카메라 손전등에 접근할 수 없습니다.", e)
+        } catch (e: SecurityException) {
+            throw IllegalStateException("카메라 권한이 필요합니다.", e)
+        }
+    }
+
+    private fun findTorchCameraId(): String? {
+        return cameraManager.cameraIdList.firstOrNull { cameraId ->
+            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+            characteristics.get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        }
+    }
 }
 
 private data class OfflineAnalysisResult(
@@ -1298,6 +1370,8 @@ private fun HomeScreen(
     onOpenDisasterPicker: () -> Unit,
     onOpenCameraCapture: () -> Unit,
     onOpenTextQuestion: () -> Unit,
+    isTorchOn: Boolean,
+    onToggleTorch: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     val micScale by animateFloatAsState(
@@ -1315,6 +1389,7 @@ private fun HomeScreen(
         HomeAction(Icons.Outlined.GridView, "재난 유형 선택", onOpenDisasterPicker),
         HomeAction(Icons.Outlined.CameraAlt, "안내문 촬영", onOpenCameraCapture),
         HomeAction(Icons.Outlined.Edit, "텍스트 질문", onOpenTextQuestion),
+        HomeAction(Icons.Outlined.WbSunny, if (isTorchOn) "손전등 끄기" else "손전등 켜기", onToggleTorch),
         HomeAction(Icons.Outlined.Settings, "설정", onOpenSettings)
     )
 
@@ -1591,8 +1666,10 @@ private fun GuidanceScreen(
     title: String?,
     statusText: String,
     warning: String?,
+    isTorchOn: Boolean,
     onBack: () -> Unit,
-    onOpenDisasterPicker: () -> Unit
+    onOpenDisasterPicker: () -> Unit,
+    onToggleTorch: () -> Unit
 ) {
     ResQGradientScreen {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -1605,7 +1682,12 @@ private fun GuidanceScreen(
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     QuickActionButton(Icons.Outlined.Phone, "119")
-                    QuickActionButton(Icons.Outlined.WbSunny, "손전등")
+                    QuickActionButton(
+                        icon = Icons.Outlined.WbSunny,
+                        label = if (isTorchOn) "끄기" else "손전등",
+                        active = isTorchOn,
+                        onClick = onToggleTorch
+                    )
                     QuickActionButton(Icons.Outlined.Notifications, "사이렌")
                 }
 
@@ -1752,12 +1834,18 @@ private fun GuidanceScreen(
 }
 
 @Composable
-private fun RowScope.QuickActionButton(icon: ImageVector, label: String) {
+private fun RowScope.QuickActionButton(
+    icon: ImageVector,
+    label: String,
+    active: Boolean = false,
+    onClick: () -> Unit = {}
+) {
     Column(
         modifier = Modifier
             .weight(1f)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFE53935))
+            .background(if (active) Color(0xFFFFB300) else Color(0xFFE53935))
+            .clickable { onClick() }
             .padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
