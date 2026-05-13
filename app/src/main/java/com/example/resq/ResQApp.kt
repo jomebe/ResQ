@@ -29,13 +29,17 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -589,7 +593,12 @@ fun ResQApp() {
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0A0A0A)) {
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing),
+        color = Color(0xFF0A0A0A)
+    ) {
         when (screen) {
             Screen.Onboard -> OnboardingScreen(onDone = { screen = Screen.Home })
             Screen.Home -> HomeScreen(
@@ -1894,7 +1903,11 @@ private fun TextQuestionScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             Header(title = "텍스트 질문", trailing = { Badge(label = "오프라인") }, onBack = onBack)
 
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding()
+            ) {
                 Text(
                     text = "상황입력",
                     fontSize = 34.sp,
