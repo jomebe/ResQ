@@ -96,6 +96,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.FileOutputStream
 import java.net.URL
+import java.security.MessageDigest
 import java.util.Locale
 import org.json.JSONObject
 import org.json.JSONArray
@@ -1719,6 +1720,7 @@ private class OfflineLlmManager(private val context: Context) {
                     if (!tempFile.renameTo(modelFile)) {
                         throw IllegalStateException("모델 파일 저장에 실패했습니다.")
                     }
+                    verifyModelFile(modelFile)
                 } finally {
                     connection.disconnect()
                 }
@@ -1803,6 +1805,7 @@ private class OfflineLlmManager(private val context: Context) {
             if (!tempFile.renameTo(modelFile)) {
                 throw IllegalStateException("내장 LLM 모델 파일 저장에 실패했습니다.")
             }
+            verifyModelFile(modelFile)
         } catch (err: Exception) {
             if (tempFile.exists()) {
                 tempFile.delete()
@@ -1822,6 +1825,27 @@ private class OfflineLlmManager(private val context: Context) {
         } catch (_: Exception) {
             -1L
         }
+    }
+
+    private fun verifyModelFile(file: File) {
+        val actual = sha256(file)
+        if (!actual.equals(EXPECTED_MODEL_SHA256, ignoreCase = true)) {
+            file.delete()
+            throw IllegalStateException("모델 파일 검증에 실패했습니다. 다시 다운로드해 주세요.")
+        }
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(1024 * 1024)
+            var read = input.read(buffer)
+            while (read >= 0) {
+                digest.update(buffer, 0, read)
+                read = input.read(buffer)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private suspend fun loadModelFromDisk() {
@@ -1955,6 +1979,7 @@ private class OfflineLlmManager(private val context: Context) {
     companion object {
         private const val MODEL_NAME = "gemma-4-E2B-it-IQ4_XS.gguf"
         private const val BUNDLED_MODEL_ASSET = "llm/gemma-4-E2B-it-IQ4_XS.gguf"
+        private const val EXPECTED_MODEL_SHA256 = "d50db8b4573839fb4a3a5e66342bb9977da4e821992ad722974359504f1d4ed3"
     }
 
 
