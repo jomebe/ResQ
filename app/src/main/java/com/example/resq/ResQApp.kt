@@ -16,6 +16,7 @@ import android.speech.tts.TextToSpeech
 import android.os.Handler
 import android.util.Log
 import java.net.HttpURLConnection
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
@@ -1024,6 +1025,42 @@ fun ResQApp() {
     var pendingMicLaunch by remember { mutableStateOf(false) }
     var isTorchOn by remember { mutableStateOf(false) }
     val strings = appStrings(language)
+
+    fun navigateBackFromCurrentScreen() {
+        when (screen) {
+            Screen.Disaster -> {
+                screen = if (disasterPickerSource == "guidance") {
+                    Screen.Guidance
+                } else {
+                    Screen.Home
+                }
+            }
+            Screen.Guidance -> {
+                if (guidanceBackTarget == "text_query") {
+                    screen = Screen.TextQuery
+                } else {
+                    statusText = "offline"
+                    guidanceTitle = null
+                    analysisWarning = null
+                    screen = Screen.Home
+                }
+            }
+            Screen.CameraLoading,
+            Screen.TextQuery,
+            Screen.Settings -> {
+                statusText = "offline"
+                guidanceTitle = null
+                analysisWarning = null
+                screen = Screen.Home
+            }
+            Screen.Onboard,
+            Screen.Home -> Unit
+        }
+    }
+
+    BackHandler(enabled = screen != Screen.Home && screen != Screen.Onboard) {
+        navigateBackFromCurrentScreen()
+    }
 
     fun toggleTorch() {
         try {
