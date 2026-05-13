@@ -557,8 +557,8 @@ private fun appStrings(language: AppLanguage): AppStrings {
             ttsTitle = "음성 TTS",
             ttsSubtitle = "음성 안내",
             ttsTone = "음성 안내 톤을 선택합니다.",
-            voiceNatural = "느낌",
-            voiceAssured = "보증",
+            voiceNatural = "느림",
+            voiceAssured = "보통",
             voiceBrisk = "빠름",
             llmModelTitle = "LLM 모델",
             llmModelSubtitle = "버튼 한 번으로 HuggingFace GGUF를 내려받아 바로 적용합니다.",
@@ -644,9 +644,9 @@ private fun appStrings(language: AppLanguage): AppStrings {
             ttsTitle = "Voice TTS",
             ttsSubtitle = "Voice guidance",
             ttsTone = "Choose the voice guidance tone.",
-            voiceNatural = "Natural",
-            voiceAssured = "Assured",
-            voiceBrisk = "Brisk",
+            voiceNatural = "Slow",
+            voiceAssured = "Normal",
+            voiceBrisk = "Fast",
             llmModelTitle = "LLM Model",
             llmModelSubtitle = "Download and apply the HuggingFace GGUF model in one tap.",
             loading = "Loading",
@@ -731,8 +731,8 @@ private fun appStrings(language: AppLanguage): AppStrings {
             ttsTitle = "语音TTS",
             ttsSubtitle = "语音指南",
             ttsTone = "选择语音指南语气。",
-            voiceNatural = "自然",
-            voiceAssured = "稳重",
+            voiceNatural = "慢速",
+            voiceAssured = "普通",
             voiceBrisk = "快速",
             llmModelTitle = "LLM模型",
             llmModelSubtitle = "一键下载并应用HuggingFace GGUF模型。",
@@ -2846,8 +2846,8 @@ private fun SettingsScreen(
                             modifier = Modifier.padding(top = 12.dp)
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                            SettingsOption(strings.voiceNatural, voiceType == "natural") { onVoiceChange("natural") }
-                            SettingsOption(strings.voiceAssured, voiceType == "assured") { onVoiceChange("assured") }
+                            SettingsOption(strings.voiceNatural, voiceType == "assured") { onVoiceChange("assured") }
+                            SettingsOption(strings.voiceAssured, voiceType == "natural") { onVoiceChange("natural") }
                             SettingsOption(strings.voiceBrisk, voiceType == "brisk") { onVoiceChange("brisk") }
                         }
                     }
