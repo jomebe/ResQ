@@ -653,8 +653,6 @@ fun ResQApp() {
                     statusText = "오프라인"
                     screen = Screen.TextQuery
                 },
-                isTorchOn = isTorchOn,
-                onToggleTorch = { requestTorchToggle() },
                 onOpenSettings = {
                     statusText = "오프라인"
                     screen = Screen.Settings
@@ -1370,8 +1368,6 @@ private fun HomeScreen(
     onOpenDisasterPicker: () -> Unit,
     onOpenCameraCapture: () -> Unit,
     onOpenTextQuestion: () -> Unit,
-    isTorchOn: Boolean,
-    onToggleTorch: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     val micScale by animateFloatAsState(
@@ -1389,7 +1385,6 @@ private fun HomeScreen(
         HomeAction(Icons.Outlined.GridView, "재난 유형 선택", onOpenDisasterPicker),
         HomeAction(Icons.Outlined.CameraAlt, "안내문 촬영", onOpenCameraCapture),
         HomeAction(Icons.Outlined.Edit, "텍스트 질문", onOpenTextQuestion),
-        HomeAction(Icons.Outlined.WbSunny, if (isTorchOn) "손전등 끄기" else "손전등 켜기", onToggleTorch),
         HomeAction(Icons.Outlined.Settings, "설정", onOpenSettings)
     )
 
