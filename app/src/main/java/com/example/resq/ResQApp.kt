@@ -48,7 +48,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -2205,7 +2204,9 @@ private fun HomeScreen(
                             .alpha(0.3f * micGlow.value)
                     )
                     Image(
-                        painter = painterResource(R.drawable.resq_ic_voice_wave),
+                        painter = painterResource(
+                            if (isListening) R.drawable.resq_ic_voice_wave else R.drawable.resq_ic_voice_mic
+                        ),
                         contentDescription = null,
                         modifier = Modifier.size(96.dp)
                     )
@@ -2990,10 +2991,9 @@ private fun Header(title: String, trailing: @Composable () -> Unit, onBack: () -
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        androidx.compose.material3.Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+        Image(
+            painter = painterResource(R.drawable.resq_ic_back_arrow),
             contentDescription = null,
-            tint = Color.White,
             modifier = Modifier
                 .size(36.dp)
                 .clickable { onBack() }
