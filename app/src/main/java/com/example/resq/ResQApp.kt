@@ -19,6 +19,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,26 +49,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Air
-import androidx.compose.material.icons.outlined.Anchor
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.GraphicEq
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Phone
-import androidx.compose.material.icons.outlined.ReportProblem
 import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.WaterDrop
-import androidx.compose.material.icons.outlined.WbSunny
-import androidx.compose.material.icons.outlined.Warning
-import androidx.compose.material.icons.outlined.Waves
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -91,8 +73,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -165,7 +147,7 @@ private data class DisasterDefinition(
     val id: DisasterId,
     val label: String,
     val cardDescription: String,
-    val icon: ImageVector,
+    val iconRes: Int,
     val headline: String,
     val steps: List<String>
 )
@@ -192,7 +174,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.Earthquake,
         label = "지진",
         cardDescription = "지진 발생시 행동요령\n대피 방법 등",
-        icon = Icons.Outlined.Waves,
+        iconRes = R.drawable.resq_ic_disaster_crack,
         headline = "건물 밖으로 대피해주세요.",
         steps = listOf(
             "흔들림이 느껴지면 책상 아래로 들어가 머리를 보호하세요.",
@@ -205,7 +187,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.Fire,
         label = "화재",
         cardDescription = "화재 발생시 행동요령\n연기 대응 등",
-        icon = Icons.Outlined.Warning,
+        iconRes = R.drawable.resq_ic_warning_red,
         headline = "연기를 피해 낮은 자세로 대피하세요.",
         steps = listOf(
             "불을 발견하면 큰 소리로 알리고 119에 신고하세요.",
@@ -218,7 +200,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.Flood,
         label = "홍수",
         cardDescription = "침수·홍수 대비\n대피 요령",
-        icon = Icons.Outlined.WaterDrop,
+        iconRes = R.drawable.resq_ic_warning_red,
         headline = "높고 안전한 곳으로 즉시 대피하세요.",
         steps = listOf(
             "침수 경보·대피 명령을 확인하고 지정된 대피소로 이동하세요.",
@@ -231,7 +213,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.Typhoon,
         label = "태풍",
         cardDescription = "강풍·호우 대비\n창문·야외 정리",
-        icon = Icons.Outlined.Air,
+        iconRes = R.drawable.resq_ic_siren_red,
         headline = "실내에서 창문에서 멀리 떨어져 주세요.",
         steps = listOf(
             "야외 물건을 고정하거나 실내로 옮기세요.",
@@ -244,7 +226,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.Landslide,
         label = "산사태",
         cardDescription = "산사태 징후\n긴급 대피",
-        icon = Icons.Outlined.ReportProblem,
+        iconRes = R.drawable.resq_ic_disaster_crack,
         headline = "비탈·도랑에서 멀리 떨어지세요.",
         steps = listOf(
             "땅 균열·작은 낙석·이상한 소리가 나면 즉시 대피하세요.",
@@ -257,7 +239,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.Tsunami,
         label = "쓰나미",
         cardDescription = "지진해일 대비\n고지대 대피",
-        icon = Icons.Outlined.Anchor,
+        iconRes = R.drawable.resq_ic_warning_red,
         headline = "해변·저지대를 떠나 높은 곳으로 가세요.",
         steps = listOf(
             "지진 직후 해안·강 하구 근처에 있지 마세요.",
@@ -270,7 +252,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.HeavySnow,
         label = "대설",
         cardDescription = "폭설·빙판\n교통·난방 안전",
-        icon = Icons.Outlined.Cloud,
+        iconRes = R.drawable.resq_ic_warning_red,
         headline = "외출을 줄이고 난방·환기를 안전하게 하세요.",
         steps = listOf(
             "필수 외출만 하고 빙판길·적설 구간을 피하세요.",
@@ -283,7 +265,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.HazardRelease,
         label = "유해물질",
         cardDescription = "화학·방사능 등\n대피·대기 지침",
-        icon = Icons.Outlined.ReportProblem,
+        iconRes = R.drawable.resq_ic_warning_red,
         headline = "방송 안내에 따라 실내 대피 또는 지정 방향으로 이동하세요.",
         steps = listOf(
             "공식 방송·재난 문자의 지시를 우선 따르세요.",
@@ -2148,10 +2130,10 @@ private fun HomeScreen(
     }
 
     val items = listOf(
-        HomeAction(Icons.Outlined.GridView, strings.homeDisasterPicker, onOpenDisasterPicker),
-        HomeAction(Icons.Outlined.CameraAlt, strings.homeCamera, onOpenCameraCapture),
-        HomeAction(Icons.Outlined.Edit, strings.homeTextQuestion, onOpenTextQuestion),
-        HomeAction(Icons.Outlined.Settings, strings.homeSettings, onOpenSettings)
+        HomeAction(R.drawable.resq_ic_home_disaster_grid, strings.homeDisasterPicker, onOpenDisasterPicker),
+        HomeAction(R.drawable.resq_ic_home_camera, strings.homeCamera, onOpenCameraCapture),
+        HomeAction(R.drawable.resq_ic_home_text, strings.homeTextQuestion, onOpenTextQuestion),
+        HomeAction(R.drawable.resq_ic_home_settings, strings.homeSettings, onOpenSettings)
     )
 
     val anims = remember { items.map { Animatable(0f) } }
@@ -2222,11 +2204,10 @@ private fun HomeScreen(
                             .background(Color(0xFFFF6B63))
                             .alpha(0.3f * micGlow.value)
                     )
-                    androidx.compose.material3.Icon(
-                        imageVector = if (isListening) Icons.Outlined.GraphicEq else Icons.Outlined.Mic,
+                    Image(
+                        painter = painterResource(R.drawable.resq_ic_voice_wave),
                         contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(88.dp)
+                        modifier = Modifier.size(96.dp)
                     )
                 }
                 Text(
@@ -2261,10 +2242,9 @@ private fun HomeScreen(
                                 .background(Color(0xFF262626)),
                             contentAlignment = Alignment.Center
                         ) {
-                            androidx.compose.material3.Icon(
-                                imageVector = item.icon,
+                            Image(
+                                painter = painterResource(item.iconRes),
                                 contentDescription = null,
-                                tint = Color(0xFFD4D4D4),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -2282,7 +2262,7 @@ private fun HomeScreen(
 }
 
 private data class HomeAction(
-    val icon: ImageVector,
+    val iconRes: Int,
     val label: String,
     val onClick: () -> Unit
 )
@@ -2364,10 +2344,10 @@ private fun DisasterScreen(
                             .background(Color(0xFF2B2B2B)),
                         contentAlignment = Alignment.Center
                     ) {
-                        androidx.compose.material3.Icon(
-                            imageVector = Icons.Outlined.WbSunny,
+                        Image(
+                            painter = painterResource(R.drawable.resq_ic_warning_red),
                             contentDescription = null,
-                            tint = Color(0xFFFF5252)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -2400,10 +2380,9 @@ private fun RowScope.DisasterCard(item: DisasterDefinition, onSelectType: (Disas
                 .background(Color(0xFF262626)),
             contentAlignment = Alignment.Center
         ) {
-            androidx.compose.material3.Icon(
-                imageVector = item.icon,
+            Image(
+                painter = painterResource(item.iconRes),
                 contentDescription = null,
-                tint = Color.White,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -2446,14 +2425,14 @@ private fun GuidanceScreen(
                     .verticalScroll(rememberScrollState())
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    QuickActionButton(Icons.Outlined.Phone, strings.call119)
+                    QuickActionButton(R.drawable.resq_ic_quick_phone, strings.call119)
                     QuickActionButton(
-                        icon = Icons.Outlined.WbSunny,
+                        iconRes = R.drawable.resq_ic_quick_flashlight,
                         label = if (isTorchOn) strings.turnOff else strings.flashlight,
                         active = isTorchOn,
                         onClick = onToggleTorch
                     )
-                    QuickActionButton(Icons.Outlined.Notifications, strings.siren)
+                    QuickActionButton(R.drawable.resq_ic_quick_siren, strings.siren)
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -2476,10 +2455,9 @@ private fun GuidanceScreen(
                                 .border(1.dp, Color(0xFF2A2A2A), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            androidx.compose.material3.Icon(
-                                imageVector = disaster.icon,
+                            Image(
+                                painter = painterResource(disaster.iconRes),
                                 contentDescription = null,
-                                tint = Color(0xFFE53935),
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -2567,10 +2545,9 @@ private fun GuidanceScreen(
                             .padding(horizontal = 12.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        androidx.compose.material3.Icon(
-                            imageVector = Icons.Outlined.Warning,
+                        Image(
+                            painter = painterResource(R.drawable.resq_ic_warning_red),
                             contentDescription = null,
-                            tint = Color(0xFFFF4D4D),
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -2600,7 +2577,7 @@ private fun GuidanceScreen(
 
 @Composable
 private fun RowScope.QuickActionButton(
-    icon: ImageVector,
+    iconRes: Int,
     label: String,
     active: Boolean = false,
     onClick: () -> Unit = {}
@@ -2614,10 +2591,9 @@ private fun RowScope.QuickActionButton(
             .padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        androidx.compose.material3.Icon(
-            imageVector = icon,
+        Image(
+            painter = painterResource(iconRes),
             contentDescription = null,
-            tint = Color.White,
             modifier = Modifier.size(22.dp)
         )
         Spacer(modifier = Modifier.height(6.dp))
