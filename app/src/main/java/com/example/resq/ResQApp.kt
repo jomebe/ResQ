@@ -195,7 +195,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.Fire,
         label = "화재",
         cardDescription = "화재 발생시 행동요령\n연기 대응 등",
-        iconRes = R.drawable.resq_ic_warning_red,
+        iconRes = R.drawable.resq_ic_fire_red,
         headline = "연기를 피해 낮은 자세로 대피하세요.",
         steps = listOf(
             "불을 발견하면 큰 소리로 알리고 119에 신고하세요.",
@@ -208,7 +208,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.Flood,
         label = "홍수",
         cardDescription = "침수·홍수 대비\n대피 요령",
-        iconRes = R.drawable.resq_ic_warning_red,
+        iconRes = R.drawable.resq_ic_flood_red,
         headline = "높고 안전한 곳으로 즉시 대피하세요.",
         steps = listOf(
             "침수 경보·대피 명령을 확인하고 지정된 대피소로 이동하세요.",
@@ -221,7 +221,7 @@ private val DisasterCatalog = listOf(
         id = DisasterId.Blackout,
         label = "정전",
         cardDescription = "정전 발생시 행동요령\n전기·이동 안전",
-        iconRes = R.drawable.resq_ic_warning_red,
+        iconRes = R.drawable.resq_ic_blackout_red,
         headline = "손전등을 켜고 전기 위험을 피하세요.",
         steps = listOf(
             "휴대폰 손전등이나 비상등을 켜고 천천히 이동하세요.",
@@ -2354,13 +2354,13 @@ private fun DisasterScreen(
                     catalog.chunked(2).forEach { row ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             row.forEach { item ->
                                 DisasterCard(item, onSelectType)
                             }
                             if (row.size == 1) {
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
                     }
