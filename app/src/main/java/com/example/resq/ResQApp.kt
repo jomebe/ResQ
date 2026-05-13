@@ -9,11 +9,15 @@ import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import android.os.Handler
 import android.util.Log
 import java.net.HttpURLConnection
 import androidx.activity.compose.BackHandler
@@ -1524,10 +1528,36 @@ private fun open119Dialer(context: Context) {
     context.startActivity(intent)
 }
 
-private fun playSirenTone() {
+private fun playSirenAlert(context: Context) {
+    vibrateSiren(context)
     val tone = ToneGenerator(AudioManager.STREAM_ALARM, 100)
     tone.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 1200)
     Handler(android.os.Looper.getMainLooper()).postDelayed({ tone.release() }, 1500)
+}
+
+private fun vibrateSiren(context: Context) {
+    val vibrator = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            manager.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+    } catch (_: Exception) {
+        return
+    }
+
+    if (!vibrator.hasVibrator()) return
+
+    val timings = longArrayOf(0, 180, 80, 180, 100, 360, 120, 520)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val amplitudes = intArrayOf(0, 255, 0, 220, 0, 255, 0, 180)
+        vibrator.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
+    } else {
+        @Suppress("DEPRECATION")
+        vibrator.vibrate(timings, -1)
+    }
 }
 
 private class TorchController(private val context: Context) {
@@ -2517,7 +2547,7 @@ private fun GuidanceScreen(
                     QuickActionButton(
                         iconRes = R.drawable.resq_ic_quick_siren,
                         label = strings.siren,
-                        onClick = { playSirenTone() }
+                        onClick = { playSirenAlert(context) }
                     )
                 }
 
