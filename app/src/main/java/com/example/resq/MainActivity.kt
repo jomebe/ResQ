@@ -4,18 +4,21 @@ import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowCompat
 import com.example.resq.ui.theme.ResQTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
         @Suppress("DEPRECATION")
-        window.statusBarColor = Color.TRANSPARENT
+        window.statusBarColor = Color.BLACK
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = Color.BLACK
         setContent {
             ResQTheme {
                 ResQApp()
