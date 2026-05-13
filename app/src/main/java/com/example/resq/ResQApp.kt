@@ -6,11 +6,14 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraManager
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.net.Uri
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.os.Handler
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -116,7 +119,7 @@ private enum class AppLanguage(
 ) {
     Korean("ko", Locale.KOREAN, "ko-KR"),
     English("en", Locale.US, "en-US"),
-    Japanese("ja", Locale.JAPAN, "ja-JP");
+    Chinese("zh", Locale.SIMPLIFIED_CHINESE, "zh-CN");
 
     companion object {
         fun fromCode(code: String): AppLanguage {
@@ -133,11 +136,12 @@ private enum class DisasterId(val id: String) {
     Landslide("landslide"),
     Tsunami("tsunami"),
     HeavySnow("heavy_snow"),
-    HazardRelease("hazard_release");
+    HazardRelease("hazard_release"),
+    Emergency("emergency");
 
     companion object {
         fun fromId(id: String): DisasterId {
-            return entries.firstOrNull { it.id == id } ?: Earthquake
+            return entries.firstOrNull { it.id == id } ?: Emergency
         }
     }
 }
@@ -272,6 +276,18 @@ private val DisasterCatalog = listOf(
             "현장 촬영·접근은 위험하니 삼가세요.",
             "대피 시 피부 노출을 최소화하고 안내된 세척 방법을 따르세요."
         )
+    ),
+    DisasterDefinition(
+        id = DisasterId.Emergency,
+        label = "119",
+        cardDescription = "매뉴얼 외 상황\n119 연결",
+        iconRes = R.drawable.resq_ic_quick_phone,
+        headline = "매뉴얼에서 해당 상황을 찾지 못했습니다.",
+        steps = listOf(
+            "즉시 119에 전화하세요.",
+            "안전한 장소로 이동한 뒤 현재 위치를 설명하세요.",
+            "공식 구조대 안내를 우선 따르세요."
+        )
     )
 )
 
@@ -371,95 +387,115 @@ private val DisasterTranslations = mapOf(
                 "Do not approach or record the scene because exposure may be dangerous.",
                 "Minimize exposed skin and follow any decontamination instructions."
             )
+        ),
+        DisasterId.Emergency to DisasterText(
+            label = "119",
+            cardDescription = "Not in manual\nCall 119",
+            headline = "This situation was not found in the manual.",
+            steps = listOf(
+                "Call 119 immediately.",
+                "Move to a safe place and describe your current location.",
+                "Follow official rescue instructions first."
+            )
         )
     ),
-    AppLanguage.Japanese to mapOf(
+    AppLanguage.Chinese to mapOf(
         DisasterId.Earthquake to DisasterText(
             label = "地震",
-            cardDescription = "地震発生時の行動\n避難方法",
-            headline = "揺れが収まったら広い場所へ避難してください。",
+            cardDescription = "地震应对\n避难方法",
+            headline = "摇晃停止后，请撤离到开阔地带。",
             steps = listOf(
-                "揺れを感じたら丈夫な机の下に入り、頭を守ってください。",
-                "揺れが収まったら階段を使い、建物の外の広い場所へ避難してください。",
-                "エレベーターは使わないでください。",
-                "屋外ではガラス、看板、落下物から離れてください。"
+                "感到摇晃时，躲到坚固桌子下并保护头部。",
+                "摇晃停止后，走楼梯到建筑外的开阔地带。",
+                "不要使用电梯。",
+                "到室外后，远离玻璃、招牌和可能掉落的物体。"
             )
         ),
         DisasterId.Fire to DisasterText(
-            label = "火災",
-            cardDescription = "火災発生時の行動\n煙への対応",
-            headline = "煙を避け、低い姿勢で避難してください。",
+            label = "火灾",
+            cardDescription = "火灾应对\n烟雾安全",
+            headline = "避开烟雾，低姿势撤离。",
             steps = listOf(
-                "火を見つけたら周囲に知らせ、119番に通報してください。",
-                "ドアノブを触り、熱くない場合だけドアを開けて避難してください。",
-                "煙がある場合は濡れた布で鼻と口を覆い、低い姿勢で移動してください。",
-                "エレベーターは使わず、非常口や階段を利用してください。"
+                "发现火情时，立即提醒周围的人并拨打119。",
+                "先触摸门把手，不烫时再开门撤离。",
+                "有烟雾时，用湿布捂住口鼻并低姿势移动。",
+                "不要乘坐电梯，请使用安全出口或楼梯。"
             )
         ),
         DisasterId.Flood to DisasterText(
             label = "洪水",
-            cardDescription = "浸水・洪水対策\n避難方法",
-            headline = "高く安全な場所へすぐに避難してください。",
+            cardDescription = "浸水和洪水\n避难指南",
+            headline = "立即前往更高、更安全的地方。",
             steps = listOf(
-                "洪水警報や避難指示を確認し、指定避難所へ移動してください。",
-                "安全であればブレーカーを落とし、ガスを閉めてください。",
-                "水に入らず、急流やマンホール付近を避けてください。",
-                "車で冠水した道路を通らないでください。"
+                "确认洪水警报和避难指示后，前往指定避难所。",
+                "在安全的情况下关闭电闸和燃气阀。",
+                "不要进入积水，避开急流和井盖附近。",
+                "不要开车通过被水淹没的道路。"
             )
         ),
         DisasterId.Typhoon to DisasterText(
-            label = "台風",
-            cardDescription = "強風・大雨対策\n室内安全",
-            headline = "室内にとどまり、窓から離れてください。",
+            label = "台风",
+            cardDescription = "强风暴雨\n室内安全",
+            headline = "留在室内，并远离窗户。",
             steps = listOf(
-                "屋外の物を固定するか室内へ移動してください。",
-                "窓やドアを閉め、カーテンやシャッターがあれば下ろしてください。",
-                "強風時は外出を避け、安全な室内にいてください。",
-                "浸水の危険がある場合は高い階や安全な場所へ移動する準備をしてください。"
+                "固定室外物品，或将其移入室内。",
+                "锁好门窗，有窗帘或百叶窗时请拉上。",
+                "强风时避免外出，待在安全的室内。",
+                "如有浸水风险，准备转移到较高楼层或安全地点。"
             )
         ),
         DisasterId.Landslide to DisasterText(
-            label = "土砂災害",
-            cardDescription = "土砂災害の兆候\n緊急避難",
-            headline = "斜面や水路、擁壁から離れてください。",
+            label = "山体滑坡",
+            cardDescription = "滑坡征兆\n紧急避难",
+            headline = "远离坡地、沟渠和挡土墙。",
             steps = listOf(
-                "地割れ、小さな落石、異音に気づいたらすぐ避難してください。",
-                "谷、擁壁、斜面の近くにとどまらないでください。",
-                "安全な避難経路だけを使い、可能なら車の利用は避けてください。",
-                "避難後も再崩落の危険があるため、案内に従ってください。"
+                "发现地面裂缝、小落石或异常声响时，立即撤离。",
+                "不要停留在山谷、挡土墙或陡坡附近。",
+                "只使用安全的避难路线，尽量避免开车。",
+                "撤离后仍可能再次崩塌，请遵循官方指示。"
             )
         ),
         DisasterId.Tsunami to DisasterText(
-            label = "津波",
-            cardDescription = "津波への備え\n高台避難",
-            headline = "海岸や低地を離れ、高い場所へ向かってください。",
+            label = "海啸",
+            cardDescription = "海啸应对\n前往高处",
+            headline = "离开海岸和低洼地，前往高处。",
             steps = listOf(
-                "地震直後は海岸や河口付近にとどまらないでください。",
-                "放送や緊急速報を確認し、すぐ高台へ移動してください。",
-                "車での移動が難しい場合は徒歩でも高い場所へ向かってください。",
-                "津波警報が解除されるまで安全な場所にいてください。"
+                "地震后不要停留在海岸或河口附近。",
+                "确认广播和紧急警报后，立即前往高处。",
+                "如果车辆难以通行，也要步行前往更高地点。",
+                "在海啸警报解除前，请留在安全地点。"
             )
         ),
         DisasterId.HeavySnow to DisasterText(
             label = "大雪",
-            cardDescription = "大雪・凍結\n交通と暖房安全",
-            headline = "外出を控え、暖房と換気を安全に行ってください。",
+            cardDescription = "积雪结冰\n交通和取暖安全",
+            headline = "减少外出，安全取暖并保持通风。",
             steps = listOf(
-                "必要な外出だけにし、凍結路や積雪区間を避けてください。",
-                "暖房器具の周囲から可燃物を離し、こまめに換気してください。",
-                "屋根やベランダからの落雪に注意してください。",
-                "運転前に除雪状況とタイヤの状態を確認してください。"
+                "只在必要时外出，并避开结冰或积雪路段。",
+                "让可燃物远离取暖设备，并经常通风。",
+                "注意屋顶和阳台积雪坠落。",
+                "开车前检查除雪情况和轮胎状态。"
             )
         ),
         DisasterId.HazardRelease to DisasterText(
-            label = "有害物質",
-            cardDescription = "化学物質・放射性物質\n屋内退避と避難",
-            headline = "公式案内に従い、屋内退避または指定方向へ移動してください。",
+            label = "有害物质",
+            cardDescription = "化学或放射性物质\n室内避险和撤离",
+            headline = "按照官方指示，室内避险或向指定方向撤离。",
             steps = listOf(
-                "公式放送や緊急速報の指示を最優先してください。",
-                "屋内退避時は窓とドアを閉め、換気を止めてください。",
-                "現場への接近や撮影は危険なので避けてください。",
-                "避難時は皮膚の露出を減らし、案内された除染方法に従ってください。"
+                "优先遵循官方广播和紧急警报的指示。",
+                "室内避险时，关闭门窗并停止通风。",
+                "不要靠近或拍摄现场，可能存在暴露风险。",
+                "撤离时尽量减少皮肤暴露，并遵循去污指示。"
+            )
+        ),
+        DisasterId.Emergency to DisasterText(
+            label = "119",
+            cardDescription = "手册外情况\n联系119",
+            headline = "手册中未找到该情况。",
+            steps = listOf(
+                "请立即拨打119。",
+                "转移到安全地点后说明当前位置。",
+                "优先遵循官方救援人员的指示。"
             )
         )
     )
@@ -527,7 +563,7 @@ private data class AppStrings(
     val languageDefaultSubtitle: String,
     val korean: String,
     val english: String,
-    val japanese: String,
+    val chinese: String,
     val ttsTitle: String,
     val ttsSubtitle: String,
     val ttsTone: String,
@@ -604,7 +640,7 @@ private fun appStrings(language: AppLanguage): AppStrings {
             turnOff = "끄기",
             siren = "사이렌",
             actionSteps = "행동 단계",
-            sourceText = "출처: 공공 안전 안내 요약 (앱 내 참고용)",
+            sourceText = "출처: 행정안전부 국민재난안전포털·소방청 119 안전 안내 요약",
             cameraTitle = "안내문 촬영",
             imageAnalyzing = "이미지 분석중...",
             textQuestionTitle = "텍스트 질문",
@@ -617,7 +653,7 @@ private fun appStrings(language: AppLanguage): AppStrings {
             languageDefaultSubtitle = "현재 기본 언어를 선택하세요.",
             korean = "한국어",
             english = "영어",
-            japanese = "일본어",
+            chinese = "중국어",
             ttsTitle = "음성 TTS",
             ttsSubtitle = "음성 안내",
             ttsTone = "음성 안내 톤을 선택합니다.",
@@ -691,7 +727,7 @@ private fun appStrings(language: AppLanguage): AppStrings {
             turnOff = "Off",
             siren = "Siren",
             actionSteps = "Action Steps",
-            sourceText = "Source: Public safety guidance summary for in-app reference",
+            sourceText = "Source: Korean public disaster and 119 safety guidance summary",
             cameraTitle = "Scan Notice",
             imageAnalyzing = "Analyzing image...",
             textQuestionTitle = "Text Question",
@@ -704,7 +740,7 @@ private fun appStrings(language: AppLanguage): AppStrings {
             languageDefaultSubtitle = "Choose the app language.",
             korean = "Korean",
             english = "English",
-            japanese = "Japanese",
+            chinese = "Chinese",
             ttsTitle = "Voice TTS",
             ttsSubtitle = "Voice guidance",
             ttsTone = "Choose the voice guidance tone.",
@@ -756,92 +792,92 @@ private fun appStrings(language: AppLanguage): AppStrings {
             cameraPermissionMessage = "Camera permission is required.",
             micPermissionMessage = "Microphone permission is required for voice input."
         )
-        AppLanguage.Japanese -> AppStrings(
-            offlineCoach = "オフライン災害コーチ",
-            offline = "オフライン",
-            online = "オンライン",
-            download = "ダウンロード",
-            ok = "確認",
-            homeDisasterPicker = "災害タイプを選択",
-            homeCamera = "案内文を撮影",
-            homeTextQuestion = "テキスト質問",
-            homeSettings = "設定",
-            voiceStart = "音声質問を開始",
-            disasterPickerTitle = "災害タイプを選択",
-            disasterQuestion = "どの災害情報が必要ですか？",
-            disasterSubtitle = "災害タイプを選択してください。",
-            noDisasterTitle = "必要な項目がありませんか？",
-            noDisasterSubtitle = "音声またはテキストで直接質問できます",
-            guidanceSuffix = "案内",
+        AppLanguage.Chinese -> AppStrings(
+            offlineCoach = "离线灾害应对教练",
+            offline = "离线",
+            online = "在线",
+            download = "下载",
+            ok = "确认",
+            homeDisasterPicker = "选择灾害类型",
+            homeCamera = "拍摄通知",
+            homeTextQuestion = "文字提问",
+            homeSettings = "设置",
+            voiceStart = "开始语音提问",
+            disasterPickerTitle = "选择灾害类型",
+            disasterQuestion = "您需要哪种灾害信息？",
+            disasterSubtitle = "请选择灾害类型。",
+            noDisasterTitle = "没有需要的项目？",
+            noDisasterSubtitle = "可用语音或文字直接提问",
+            guidanceSuffix = "指南",
             call119 = "119",
-            flashlight = "ライト",
-            turnOff = "オフ",
-            siren = "サイレン",
-            actionSteps = "行動手順",
-            sourceText = "出典: 公共安全案内の要約（アプリ内参考用）",
-            cameraTitle = "案内文を撮影",
-            imageAnalyzing = "画像を分析中...",
-            textQuestionTitle = "テキスト質問",
-            situationInput = "状況入力",
-            textPlaceholder = "現在の状況を入力してください。",
+            flashlight = "手电筒",
+            turnOff = "关闭",
+            siren = "警报",
+            actionSteps = "行动步骤",
+            sourceText = "来源：韩国公共灾害与119安全指南摘要",
+            cameraTitle = "拍摄通知",
+            imageAnalyzing = "正在分析图像...",
+            textQuestionTitle = "文字提问",
+            situationInput = "情况输入",
+            textPlaceholder = "请输入当前情况。",
             aiAnalyzing = "AI分析中...",
-            getGuidance = "案内を受ける",
-            settingsTitle = "設定",
-            languageDefaultTitle = "既定の言語",
-            languageDefaultSubtitle = "アプリの表示言語を選択してください。",
-            korean = "韓国語",
-            english = "英語",
-            japanese = "日本語",
-            ttsTitle = "音声TTS",
-            ttsSubtitle = "音声案内",
-            ttsTone = "音声案内のトーンを選択します。",
+            getGuidance = "获取指南",
+            settingsTitle = "设置",
+            languageDefaultTitle = "默认语言",
+            languageDefaultSubtitle = "请选择应用语言。",
+            korean = "韩语",
+            english = "英语",
+            chinese = "中文",
+            ttsTitle = "语音TTS",
+            ttsSubtitle = "语音指南",
+            ttsTone = "选择语音指南语气。",
             voiceNatural = "自然",
-            voiceAssured = "安心",
-            voiceBrisk = "速め",
-            llmModelTitle = "LLMモデル",
-            llmModelSubtitle = "HuggingFace GGUFモデルをワンタップで取得して適用します。",
-            loading = "読み込み中",
-            ready = "準備完了",
-            none = "なし",
-            status = "状態",
-            modelPath = "モデルパス",
-            installMethod = "インストール方法",
-            bundledModelFirst = "アプリ内蔵モデル優先",
-            reloadModel = "モデルを再取得",
-            deleteModel = "モデル削除",
-            modelNote = "テキスト質問はアプリ内蔵のオフラインモデルを優先して使用します。問題があればモデルを再取得してください。",
-            errorPrefix = "エラー",
-            noticeTitle = "案内",
-            noticeBody = "オフラインでも基本災害案内と内蔵LLM機能を使用できます。",
-            cameraCaptureTitle = "カメラ撮影",
-            voiceQuestionTitle = "音声質問",
-            modelNeededTitle = "LLMモデルが必要です",
-            modelNeededMessage = "内蔵LLMモデルを準備できませんでした。ダウンロードでモデルを再取得して適用できます。",
-            modelLoadingTitle = "モデル準備中",
-            modelLoadingMessage = "内蔵LLMモデルを準備しています。しばらくしてからもう一度お試しください。",
-            modelReadyTitle = "モデル準備完了",
-            modelReadyMessage = "LLMモデルを取得して適用しました。",
-            downloadFailedTitle = "ダウンロード失敗",
-            downloadFailedMessage = "モデルをダウンロードできませんでした。",
-            modelDeletedTitle = "モデル削除",
-            modelDeletedMessage = "LLMモデルを削除しました。",
-            deleteFailedTitle = "削除失敗",
-            deleteFailedMessage = "モデルを削除できませんでした。",
-            inputNeededTitle = "入力が必要です",
-            inputNeededMessage = "状況を入力してください。",
-            analysisErrorTitle = "分析エラー",
-            analysisErrorMessage = "分析中にエラーが発生しました。",
-            voiceFailedTitle = "音声認識失敗",
-            voiceFailedMessage = "もう一度ゆっくり話してください。",
-            noFlashTitle = "ライトなし",
-            noFlashMessage = "この端末ではライトを使用できません。",
-            torchErrorTitle = "ライトエラー",
-            torchErrorMessage = "ライトを切り替えられませんでした。",
-            captureFailedTitle = "撮影失敗",
-            captureFailedMessage = "カメラ撮影がキャンセルされました。",
-            permissionTitle = "権限が必要です",
-            cameraPermissionMessage = "カメラ権限が必要です。",
-            micPermissionMessage = "音声入力にはマイク権限が必要です。"
+            voiceAssured = "稳重",
+            voiceBrisk = "快速",
+            llmModelTitle = "LLM模型",
+            llmModelSubtitle = "一键下载并应用HuggingFace GGUF模型。",
+            loading = "加载中",
+            ready = "就绪",
+            none = "无",
+            status = "状态",
+            modelPath = "模型路径",
+            installMethod = "安装方式",
+            bundledModelFirst = "优先使用内置模型",
+            reloadModel = "重新下载模型",
+            deleteModel = "删除模型",
+            modelNote = "文字提问优先使用应用内置的离线模型。如有问题，请重新下载模型。",
+            errorPrefix = "错误",
+            noticeTitle = "提示",
+            noticeBody = "离线状态下也可使用基本灾害指南和内置LLM功能。",
+            cameraCaptureTitle = "拍摄",
+            voiceQuestionTitle = "语音提问",
+            modelNeededTitle = "需要LLM模型",
+            modelNeededMessage = "未能准备内置LLM模型。可通过下载按钮重新获取并应用。",
+            modelLoadingTitle = "模型准备中",
+            modelLoadingMessage = "正在准备内置LLM模型，请稍后再试。",
+            modelReadyTitle = "模型已就绪",
+            modelReadyMessage = "LLM模型已下载并应用。",
+            downloadFailedTitle = "下载失败",
+            downloadFailedMessage = "无法下载模型。",
+            modelDeletedTitle = "模型已删除",
+            modelDeletedMessage = "LLM模型已删除。",
+            deleteFailedTitle = "删除失败",
+            deleteFailedMessage = "无法删除模型。",
+            inputNeededTitle = "需要输入",
+            inputNeededMessage = "请输入情况。",
+            analysisErrorTitle = "分析错误",
+            analysisErrorMessage = "分析过程中发生错误。",
+            voiceFailedTitle = "语音识别失败",
+            voiceFailedMessage = "请再慢慢说一遍。",
+            noFlashTitle = "无手电筒",
+            noFlashMessage = "此设备不支持手电筒控制。",
+            torchErrorTitle = "手电筒错误",
+            torchErrorMessage = "无法切换手电筒。",
+            captureFailedTitle = "拍摄失败",
+            captureFailedMessage = "相机拍摄已取消。",
+            permissionTitle = "需要权限",
+            cameraPermissionMessage = "需要相机权限。",
+            micPermissionMessage = "语音输入需要麦克风权限。"
         )
     }
 }
@@ -850,7 +886,7 @@ private fun downloadProgressText(language: AppLanguage, progress: Int): String {
     return when (language) {
         AppLanguage.Korean -> "다운로드 $progress%"
         AppLanguage.English -> "Download $progress%"
-        AppLanguage.Japanese -> "ダウンロード $progress%"
+        AppLanguage.Chinese -> "下载 $progress%"
     }
 }
 
@@ -858,7 +894,7 @@ private fun loadingProgressText(language: AppLanguage, progress: Int): String {
     return when (language) {
         AppLanguage.Korean -> "진행률: $progress%"
         AppLanguage.English -> "Progress: $progress%"
-        AppLanguage.Japanese -> "進行率: $progress%"
+        AppLanguage.Chinese -> "进度: $progress%"
     }
 }
 
@@ -892,6 +928,7 @@ private fun localizedRecommendation(disasterId: DisasterId, language: AppLanguag
             DisasterId.Tsunami -> "즉시 높은 지대로 대피하세요."
             DisasterId.HeavySnow -> "외출을 자제하고 보온에 신경쓰세요."
             DisasterId.HazardRelease -> "즉시 환기하고 안전거리 확보하세요."
+            DisasterId.Emergency -> "매뉴얼에서 해당 상황을 찾지 못했습니다. 즉시 119에 전화하세요."
         }
         AppLanguage.English -> when (disasterId) {
             DisasterId.Earthquake -> "Watch for structural cracks and falling objects."
@@ -902,16 +939,18 @@ private fun localizedRecommendation(disasterId: DisasterId, language: AppLanguag
             DisasterId.Tsunami -> "Evacuate to higher ground immediately."
             DisasterId.HeavySnow -> "Avoid unnecessary travel and keep warm safely."
             DisasterId.HazardRelease -> "Move upwind, keep distance, and call 119 if needed."
+            DisasterId.Emergency -> "Not in manual. Call 119 immediately."
         }
-        AppLanguage.Japanese -> when (disasterId) {
-            DisasterId.Earthquake -> "建物のひび割れや落下物に注意してください。"
-            DisasterId.Fire -> "煙を避け、低い姿勢で速やかに避難してください。"
-            DisasterId.Flood -> "高い場所へ移動し、電気製品に注意してください。"
-            DisasterId.Typhoon -> "窓から離れ、安全な室内へ移動してください。"
-            DisasterId.Landslide -> "山の斜面や川の近くを避けてください。"
-            DisasterId.Tsunami -> "すぐに高台へ避難してください。"
-            DisasterId.HeavySnow -> "不要な外出を控え、安全に暖を取ってください。"
-            DisasterId.HazardRelease -> "風上へ離れ、安全距離を確保し、必要なら119番に通報してください。"
+        AppLanguage.Chinese -> when (disasterId) {
+            DisasterId.Earthquake -> "注意建筑裂缝和坠落物。"
+            DisasterId.Fire -> "避开烟雾，低姿势快速撤离。"
+            DisasterId.Flood -> "前往高处，避开电气危险。"
+            DisasterId.Typhoon -> "远离窗户，待在安全室内。"
+            DisasterId.Landslide -> "避开山坡、山谷和河流附近。"
+            DisasterId.Tsunami -> "立即撤离到高处。"
+            DisasterId.HeavySnow -> "避免不必要外出，并安全保暖。"
+            DisasterId.HazardRelease -> "向上风方向移动，保持距离，必要时拨打119。"
+            DisasterId.Emergency -> "手册中未找到。请立即拨打119。"
         }
     }
 }
@@ -939,14 +978,14 @@ private fun guidanceSpeechText(
 private fun detectDisasterFromKeywords(text: String): DisasterDetectResult {
     val normalized = text.lowercase(Locale.getDefault())
     val types = listOf(
-        DisasterDetectResult(DisasterId.Earthquake, "지진", 0.7, listOf("지진", "진동", "흔들", "흔들림", "진동이", "earthquake", "quake", "shake", "地震", "揺れ", "震動")),
-        DisasterDetectResult(DisasterId.Fire, "화재", 0.7, listOf("불", "화재", "불이", "불나", "불이야", "연기", "화염", "불꽃", "fire", "smoke", "flame", "火災", "火", "煙", "炎")),
-        DisasterDetectResult(DisasterId.Flood, "홍수", 0.7, listOf("물", "홍수", "침수", "물이", "물이차", "물이들어와", "flood", "water", "flooding", "洪水", "浸水", "水")),
-        DisasterDetectResult(DisasterId.Typhoon, "태풍", 0.7, listOf("바람", "태풍", "강풍", "폭풍", "호우", "heavy rain", "typhoon", "wind", "storm", "台風", "強風", "暴風", "大雨", "嵐")),
-        DisasterDetectResult(DisasterId.Landslide, "산사태", 0.7, listOf("산사태", "붕괴", "무너지", "흙", "땅", "landslide", "土砂崩れ", "崖崩れ", "地滑り")),
-        DisasterDetectResult(DisasterId.Tsunami, "쓰나미", 0.7, listOf("쓰나미", "해일", "해일경보", "tsunami", "津波")),
-        DisasterDetectResult(DisasterId.HeavySnow, "대설", 0.7, listOf("눈", "대설", "폭설", "눈사태", "빙판", "snow", "blizzard", "heavy snow", "大雪", "吹雪", "雪", "凍結")),
-        DisasterDetectResult(DisasterId.HazardRelease, "유해물질", 0.7, listOf("유해", "독", "가스", "가스누출", "가스냄새", "화학", "유출", "누출", "폭발", "hazard", "gas", "chemical", "有害", "ガス", "化学", "漏れ", "爆発"))
+        DisasterDetectResult(DisasterId.Earthquake, "지진", 0.7, listOf("지진", "진동", "흔들", "흔들림", "진동이", "earthquake", "quake", "shake", "地震", "摇晃", "震动")),
+        DisasterDetectResult(DisasterId.Fire, "화재", 0.7, listOf("불", "화재", "불이", "불나", "불이야", "연기", "화염", "불꽃", "fire", "smoke", "flame", "火灾", "着火", "烟", "火焰")),
+        DisasterDetectResult(DisasterId.Flood, "홍수", 0.7, listOf("물", "홍수", "침수", "물이", "물이차", "물이들어와", "flood", "water", "flooding", "洪水", "浸水", "积水")),
+        DisasterDetectResult(DisasterId.Typhoon, "태풍", 0.7, listOf("바람", "태풍", "강풍", "폭풍", "호우", "heavy rain", "typhoon", "wind", "storm", "台风", "强风", "暴风", "暴雨")),
+        DisasterDetectResult(DisasterId.Landslide, "산사태", 0.7, listOf("산사태", "붕괴", "무너지", "흙", "땅", "landslide", "山体滑坡", "滑坡", "塌方")),
+        DisasterDetectResult(DisasterId.Tsunami, "쓰나미", 0.7, listOf("쓰나미", "해일", "해일경보", "tsunami", "海啸")),
+        DisasterDetectResult(DisasterId.HeavySnow, "대설", 0.7, listOf("눈", "대설", "폭설", "눈사태", "빙판", "snow", "blizzard", "heavy snow", "大雪", "暴雪", "雪", "结冰")),
+        DisasterDetectResult(DisasterId.HazardRelease, "유해물질", 0.7, listOf("유해", "독", "가스", "가스누출", "가스냄새", "화학", "유출", "누출", "폭발", "hazard", "gas", "chemical", "有害", "煤气", "燃气", "化学", "泄漏", "爆炸"))
     )
 
     for (type in types) {
@@ -955,7 +994,7 @@ private fun detectDisasterFromKeywords(text: String): DisasterDetectResult {
         }
     }
 
-    return DisasterDetectResult(DisasterId.Earthquake, "지진", 0.3, emptyList())
+    return DisasterDetectResult(DisasterId.Emergency, "119", 0.0, emptyList())
 }
 
 private data class DisasterDetectResult(
@@ -1003,10 +1042,7 @@ private fun analyzeVoiceInputLocally(userInput: String): AnalysisResult {
         )
     }
 
-    return AnalysisResult(
-        DisasterId.Earthquake,
-        "상황이 위험하다고 판단되면 즉시 신고하세요."
-    )
+    return AnalysisResult(DisasterId.Emergency, localizedRecommendation(DisasterId.Emergency, AppLanguage.Korean))
 }
 
 private fun analyzeCapturedImage(uri: String, language: AppLanguage): AnalysisResult {
@@ -1024,7 +1060,7 @@ private fun analyzeCapturedImage(uri: String, language: AppLanguage): AnalysisRe
         }
     }
 
-    return AnalysisResult(DisasterId.Earthquake, localizedRecommendation(DisasterId.Earthquake, language))
+    return AnalysisResult(DisasterId.Emergency, localizedRecommendation(DisasterId.Emergency, language))
 }
 
 private fun analyzeTextQuery(inputText: String, selectedTag: String): AnalysisResult {
@@ -1056,7 +1092,7 @@ private fun analyzeTextQuery(inputText: String, selectedTag: String): AnalysisRe
         }
     }
 
-    return AnalysisResult(DisasterId.Earthquake, "정확한 위치와 주변 위험요소를 계속 공유해 주세요.")
+    return AnalysisResult(DisasterId.Emergency, localizedRecommendation(DisasterId.Emergency, AppLanguage.Korean))
 }
 
 @Composable
@@ -1554,6 +1590,17 @@ private fun createCameraUri(context: Context): Uri {
     )
 }
 
+private fun open119Dialer(context: Context) {
+    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:119"))
+    context.startActivity(intent)
+}
+
+private fun playSirenTone() {
+    val tone = ToneGenerator(AudioManager.STREAM_ALARM, 100)
+    tone.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 1200)
+    Handler(android.os.Looper.getMainLooper()).postDelayed({ tone.release() }, 1500)
+}
+
 private class TorchController(private val context: Context) {
     private val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
 
@@ -1617,7 +1664,8 @@ private class OfflineLlmManager(private val context: Context) {
         Pair("산사태", "산 기슭을 피하고 높은 곳으로 이동하세요."),
         Pair("쓰나미", "즉시 높은 지대(30m 이상)로 대피하세요."),
         Pair("대설", "외출을 자제하고 실내에서 대기하세요."),
-        Pair("위험물", "바람 방향 반대로 대피하고 119에 신고하세요.")
+        Pair("위험물", "바람 방향 반대로 대피하고 119에 신고하세요."),
+        Pair("119", "매뉴얼에서 해당 상황을 찾지 못했습니다. 즉시 119에 전화하세요.")
     )
 
     fun hasModel(): Boolean = modelFile.exists() && modelFile.length() > 0L
@@ -1813,6 +1861,7 @@ private class OfflineLlmManager(private val context: Context) {
 6=쓰나미(tsunami)
 7=대설(heavy snow, blizzard)
 8=위험물(chemical, gas)
+9=매뉴얼에 없는 비재난 질문(none, not disaster)
 """.trimIndent()
 
                 if (!_state.value.isInitialized) {
@@ -1841,18 +1890,21 @@ private class OfflineLlmManager(private val context: Context) {
                 val categoryNum = classification.firstOrNull { it.isDigit() }?.digitToInt()
                     ?: when {
                         normalized.contains("지진") || normalized.contains("earthquake") || normalized.contains("地震") -> 1
-                        normalized.contains("화재") || normalized.contains("fire") || normalized.contains("火災") -> 2
+                        normalized.contains("화재") || normalized.contains("fire") || normalized.contains("火灾") || normalized.contains("着火") -> 2
                         normalized.contains("홍수") || normalized.contains("flood") || normalized.contains("洪水") || normalized.contains("浸水") -> 3
-                        normalized.contains("태풍") || normalized.contains("typhoon") || normalized.contains("台風") -> 4
-                        normalized.contains("산사태") || normalized.contains("landslide") || normalized.contains("土砂") || normalized.contains("地滑り") -> 5
-                        normalized.contains("쓰나미") || normalized.contains("tsunami") || normalized.contains("해일") || normalized.contains("津波") -> 6
+                        normalized.contains("태풍") || normalized.contains("typhoon") || normalized.contains("台风") -> 4
+                        normalized.contains("산사태") || normalized.contains("landslide") || normalized.contains("滑坡") || normalized.contains("塌方") -> 5
+                        normalized.contains("쓰나미") || normalized.contains("tsunami") || normalized.contains("해일") || normalized.contains("海啸") -> 6
                         normalized.contains("대설") || normalized.contains("폭설") || normalized.contains("heavy snow") || normalized.contains("大雪") -> 7
-                        normalized.contains("위험물") || normalized.contains("hazard") || normalized.contains("chemical") || normalized.contains("有害") || normalized.contains("ガス") -> 8
-                        else -> 1
+                        normalized.contains("위험물") || normalized.contains("hazard") || normalized.contains("chemical") || normalized.contains("有害") || normalized.contains("燃气") || normalized.contains("煤气") -> 8
+                        normalized.contains("none") || normalized.contains("not disaster") || normalized.contains("비재난") || normalized.contains("없음") -> 9
+                        else -> fallbackTextCategory(prompt).let { fallback ->
+                            return@withContext fallback
+                        }
                     }
                 Log.d("ResQApp-LLM", "파싱된 카테고리 번호: $categoryNum")
 
-                val selectedCategory = if (categoryNum in 1..8) {
+                val selectedCategory = if (categoryNum in 1..9) {
                     textCategories[categoryNum - 1]
                 } else {
                     fallbackTextCategory(prompt)
@@ -1880,6 +1932,7 @@ private class OfflineLlmManager(private val context: Context) {
             DisasterId.Tsunami -> 5
             DisasterId.HeavySnow -> 6
             DisasterId.HazardRelease -> 7
+            DisasterId.Emergency -> 8
         }
         return textCategories[index]
     }
@@ -2416,6 +2469,7 @@ private fun GuidanceScreen(
     onToggleTorch: () -> Unit
 ) {
     val strings = appStrings(language)
+    val context = LocalContext.current
     ResQGradientScreen {
         Column(modifier = Modifier.fillMaxSize()) {
             Header(title = title ?: "${disaster.label} ${strings.guidanceSuffix}", trailing = { Badge(label = statusText) }, onBack = onBack)
@@ -2426,14 +2480,22 @@ private fun GuidanceScreen(
                     .verticalScroll(rememberScrollState())
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    QuickActionButton(R.drawable.resq_ic_quick_phone, strings.call119)
+                    QuickActionButton(
+                        iconRes = R.drawable.resq_ic_quick_phone,
+                        label = strings.call119,
+                        onClick = { open119Dialer(context) }
+                    )
                     QuickActionButton(
                         iconRes = R.drawable.resq_ic_quick_flashlight,
                         label = if (isTorchOn) strings.turnOff else strings.flashlight,
                         active = isTorchOn,
                         onClick = onToggleTorch
                     )
-                    QuickActionButton(R.drawable.resq_ic_quick_siren, strings.siren)
+                    QuickActionButton(
+                        iconRes = R.drawable.resq_ic_quick_siren,
+                        label = strings.siren,
+                        onClick = { playSirenTone() }
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -2729,14 +2791,15 @@ private suspend fun analyzeTextQueryWithLLM(
         val (disasterType, advice) = offlineLlm.analyzeForTextQuery(inputText)
         val disasterId = when (disasterType) {
             "지진", "Earthquake", "地震" -> DisasterId.Earthquake
-            "화재", "Fire", "火災" -> DisasterId.Fire
+            "화재", "Fire", "火灾" -> DisasterId.Fire
             "홍수", "Flood", "洪水" -> DisasterId.Flood
-            "태풍", "Typhoon", "台風" -> DisasterId.Typhoon
-            "산사태", "Landslide", "土砂災害" -> DisasterId.Landslide
-            "쓰나미", "Tsunami", "津波" -> DisasterId.Tsunami
+            "태풍", "Typhoon", "台风" -> DisasterId.Typhoon
+            "산사태", "Landslide", "山体滑坡" -> DisasterId.Landslide
+            "쓰나미", "Tsunami", "海啸" -> DisasterId.Tsunami
             "대설", "Heavy Snow", "大雪" -> DisasterId.HeavySnow
-            "위험물", "Hazardous Material", "有害物質" -> DisasterId.HazardRelease
-            else -> DisasterId.Earthquake
+            "위험물", "Hazardous Material", "有害物质" -> DisasterId.HazardRelease
+            "119", "Emergency" -> DisasterId.Emergency
+            else -> DisasterId.Emergency
         }
         AnalysisResult(
             disasterId,
@@ -2775,7 +2838,7 @@ private fun SettingsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SettingsOption(strings.korean, language == AppLanguage.Korean) { onLanguageChange(AppLanguage.Korean) }
                         SettingsOption(strings.english, language == AppLanguage.English) { onLanguageChange(AppLanguage.English) }
-                        SettingsOption(strings.japanese, language == AppLanguage.Japanese) { onLanguageChange(AppLanguage.Japanese) }
+                        SettingsOption(strings.chinese, language == AppLanguage.Chinese) { onLanguageChange(AppLanguage.Chinese) }
                     }
                 }
 
