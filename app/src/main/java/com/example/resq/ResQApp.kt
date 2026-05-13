@@ -15,6 +15,7 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.os.Handler
 import android.util.Log
+import java.net.HttpURLConnection
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
@@ -101,7 +102,13 @@ import java.util.Locale
 import org.json.JSONObject
 import org.json.JSONArray
 
-private const val MODEL_DOWNLOAD_URL = "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-IQ4_XS.gguf?download=1"
+private const val HF_MODEL_REPO_ID = "unsloth/gemma-4-E2B-it-GGUF"
+private const val HF_MODEL_API_URL = "https://huggingface.co/api/models/$HF_MODEL_REPO_ID?blobs=true"
+private const val MIN_HF_MODEL_BYTES = 2_000_000_000L
+private val HF_MODEL_CANDIDATES = listOf(
+    "gemma-4-E2B-it-UD-Q4_K_XL.gguf",
+    "gemma-4-E2B-it-IQ4_XS.gguf"
+)
 
 private enum class Screen {
     Onboard,
@@ -132,12 +139,9 @@ private enum class AppLanguage(
 private enum class DisasterId(val id: String) {
     Earthquake("earthquake"),
     Fire("fire"),
+    Blackout("blackout"),
     Flood("flood"),
-    Typhoon("typhoon"),
-    Landslide("landslide"),
-    Tsunami("tsunami"),
-    HeavySnow("heavy_snow"),
-    HazardRelease("hazard_release"),
+    FirstAid("first_aid"),
     Emergency("emergency");
 
     companion object {
@@ -214,68 +218,29 @@ private val DisasterCatalog = listOf(
         )
     ),
     DisasterDefinition(
-        id = DisasterId.Typhoon,
-        label = "태풍",
-        cardDescription = "강풍·호우 대비\n창문·야외 정리",
+        id = DisasterId.Blackout,
+        label = "정전",
+        cardDescription = "정전 발생시 행동요령\n전기·이동 안전",
+        iconRes = R.drawable.resq_ic_warning_red,
+        headline = "손전등을 켜고 전기 위험을 피하세요.",
+        steps = listOf(
+            "휴대폰 손전등이나 비상등을 켜고 천천히 이동하세요.",
+            "엘리베이터 안이면 비상벨을 누르고 구조를 기다리세요.",
+            "젖은 손으로 전기기기나 차단기를 만지지 마세요.",
+            "가스 냄새나 연기가 있으면 즉시 119에 신고하세요."
+        )
+    ),
+    DisasterDefinition(
+        id = DisasterId.FirstAid,
+        label = "응급",
+        cardDescription = "심정지·출혈·기도폐쇄\n119 우선",
         iconRes = R.drawable.resq_ic_siren_red,
-        headline = "실내에서 창문에서 멀리 떨어져 주세요.",
+        headline = "먼저 119에 전화하세요.",
         steps = listOf(
-            "야외 물건을 고정하거나 실내로 옮기세요.",
-            "창문·문을 잠그고 커튼·셔터가 있으면 내려주세요.",
-            "강풍 시 외출을 삼가고 안전한 실내에 머무르세요.",
-            "침수 위험이 있으면 층고가 높은 곳으로 이동을 준비하세요."
-        )
-    ),
-    DisasterDefinition(
-        id = DisasterId.Landslide,
-        label = "산사태",
-        cardDescription = "산사태 징후\n긴급 대피",
-        iconRes = R.drawable.resq_ic_disaster_crack,
-        headline = "비탈·도랑에서 멀리 떨어지세요.",
-        steps = listOf(
-            "땅 균열·작은 낙석·이상한 소리가 나면 즉시 대피하세요.",
-            "계곡·옹벽·사면 인근에 머무르지 마세요.",
-            "대피 시 안전한 경로만 이용하고 차량은 가능한 한 피하세요.",
-            "대피 후에는 추가 붕괴 위험이 있으니 안내에 따르세요."
-        )
-    ),
-    DisasterDefinition(
-        id = DisasterId.Tsunami,
-        label = "쓰나미",
-        cardDescription = "지진해일 대비\n고지대 대피",
-        iconRes = R.drawable.resq_ic_warning_red,
-        headline = "해변·저지대를 떠나 높은 곳으로 가세요.",
-        steps = listOf(
-            "지진 직후 해안·강 하구 근처에 있지 마세요.",
-            "방송·재난 문자를 확인하고 즉시 고지대로 이동하세요.",
-            "차량 이동이 어려우면 도보로라도 높은 곳을 향하세요.",
-            "해일 경보가 해제될 때까지 안전한 곳에 머무르세요."
-        )
-    ),
-    DisasterDefinition(
-        id = DisasterId.HeavySnow,
-        label = "대설",
-        cardDescription = "폭설·빙판\n교통·난방 안전",
-        iconRes = R.drawable.resq_ic_warning_red,
-        headline = "외출을 줄이고 난방·환기를 안전하게 하세요.",
-        steps = listOf(
-            "필수 외출만 하고 빙판길·적설 구간을 피하세요.",
-            "난방기구 주변 가연물을 치우고 환기를 자주 하세요.",
-            "지붕·발코니의 눈 무너짐에 주의하세요.",
-            "차량은 미리 제설·타이어 상태를 점검하세요."
-        )
-    ),
-    DisasterDefinition(
-        id = DisasterId.HazardRelease,
-        label = "유해물질",
-        cardDescription = "화학·방사능 등\n대피·대기 지침",
-        iconRes = R.drawable.resq_ic_warning_red,
-        headline = "방송 안내에 따라 실내 대피 또는 지정 방향으로 이동하세요.",
-        steps = listOf(
-            "공식 방송·재난 문자의 지시를 우선 따르세요.",
-            "실내 대피 시 창문·문을 닫고 환기를 끄세요.",
-            "현장 촬영·접근은 위험하니 삼가세요.",
-            "대피 시 피부 노출을 최소화하고 안내된 세척 방법을 따르세요."
+            "주변 사람에게 119 신고와 AED 요청을 맡기세요.",
+            "반응과 호흡을 확인하고, 숨을 쉬지 않으면 가슴압박을 시작하세요.",
+            "심한 출혈은 깨끗한 천으로 직접 압박하세요.",
+            "기도폐쇄가 의심되면 기침 가능 여부를 확인하고 119 안내를 따르세요."
         )
     ),
     DisasterDefinition(
@@ -334,59 +299,26 @@ private val DisasterTranslations = mapOf(
                 "Do not drive through flooded roads."
             )
         ),
-        DisasterId.Typhoon to DisasterText(
-            label = "Typhoon",
-            cardDescription = "Strong wind and rain\nIndoor safety",
-            headline = "Stay indoors and keep away from windows.",
+        DisasterId.Blackout to DisasterText(
+            label = "Blackout",
+            cardDescription = "Power outage response\nElectrical safety",
+            headline = "Use a flashlight and avoid electrical hazards.",
             steps = listOf(
-                "Secure outdoor objects or move them indoors.",
-                "Lock windows and doors, and close curtains or shutters if available.",
-                "Avoid going outside during strong winds and stay in a safe indoor area.",
-                "If flooding is possible, prepare to move to a higher floor or safer place."
+                "Turn on a phone flashlight or emergency light and move slowly.",
+                "If you are in an elevator, press the emergency bell and wait for rescue.",
+                "Do not touch appliances or breakers with wet hands.",
+                "If you smell gas or see smoke, call 119 immediately."
             )
         ),
-        DisasterId.Landslide to DisasterText(
-            label = "Landslide",
-            cardDescription = "Landslide signs\nEmergency evacuation",
-            headline = "Move away from slopes, ditches, and retaining walls.",
+        DisasterId.FirstAid to DisasterText(
+            label = "First Aid",
+            cardDescription = "Cardiac arrest, bleeding, choking\nCall 119 first",
+            headline = "Call 119 first.",
             steps = listOf(
-                "If you notice ground cracks, small rockfalls, or unusual sounds, evacuate immediately.",
-                "Do not stay near valleys, retaining walls, or steep slopes.",
-                "Use only safe evacuation routes and avoid driving if possible.",
-                "After evacuating, follow official guidance because further collapse may occur."
-            )
-        ),
-        DisasterId.Tsunami to DisasterText(
-            label = "Tsunami",
-            cardDescription = "Tsunami response\nMove to high ground",
-            headline = "Leave beaches and low areas for higher ground.",
-            steps = listOf(
-                "After an earthquake, do not stay near coasts or river mouths.",
-                "Check broadcasts and emergency alerts, then move to high ground immediately.",
-                "If driving is difficult, continue on foot toward higher ground.",
-                "Stay in a safe location until the tsunami warning is lifted."
-            )
-        ),
-        DisasterId.HeavySnow to DisasterText(
-            label = "Heavy Snow",
-            cardDescription = "Snow and ice\nTraffic and heating safety",
-            headline = "Limit travel and use heating safely with ventilation.",
-            steps = listOf(
-                "Go out only when necessary and avoid icy or snow-covered routes.",
-                "Keep flammable items away from heaters and ventilate often.",
-                "Watch for snow falling from roofs and balconies.",
-                "Check snow removal and tire condition before driving."
-            )
-        ),
-        DisasterId.HazardRelease to DisasterText(
-            label = "Hazardous Material",
-            cardDescription = "Chemical or radiation\nShelter and evacuation",
-            headline = "Follow official instructions to shelter indoors or evacuate.",
-            steps = listOf(
-                "Prioritize instructions from official broadcasts and emergency alerts.",
-                "When sheltering indoors, close windows and doors and turn off ventilation.",
-                "Do not approach or record the scene because exposure may be dangerous.",
-                "Minimize exposed skin and follow any decontamination instructions."
+                "Ask someone nearby to call 119 and bring an AED.",
+                "Check response and breathing; start chest compressions if the person is not breathing.",
+                "For severe bleeding, apply direct pressure with clean cloth.",
+                "For choking, check whether the person can cough and follow 119 instructions."
             )
         ),
         DisasterId.Emergency to DisasterText(
@@ -434,59 +366,26 @@ private val DisasterTranslations = mapOf(
                 "不要开车通过被水淹没的道路。"
             )
         ),
-        DisasterId.Typhoon to DisasterText(
-            label = "台风",
-            cardDescription = "强风暴雨\n室内安全",
-            headline = "留在室内，并远离窗户。",
+        DisasterId.Blackout to DisasterText(
+            label = "停电",
+            cardDescription = "停电应对\n用电和移动安全",
+            headline = "打开手电筒，避开用电危险。",
             steps = listOf(
-                "固定室外物品，或将其移入室内。",
-                "锁好门窗，有窗帘或百叶窗时请拉上。",
-                "强风时避免外出，待在安全的室内。",
-                "如有浸水风险，准备转移到较高楼层或安全地点。"
+                "打开手机手电筒或应急灯，慢慢移动。",
+                "如果在电梯内，按紧急按钮并等待救援。",
+                "不要用湿手触摸电器或电闸。",
+                "如闻到煤气味或看到烟雾，请立即拨打119。"
             )
         ),
-        DisasterId.Landslide to DisasterText(
-            label = "山体滑坡",
-            cardDescription = "滑坡征兆\n紧急避难",
-            headline = "远离坡地、沟渠和挡土墙。",
+        DisasterId.FirstAid to DisasterText(
+            label = "急救",
+            cardDescription = "心脏骤停、出血、窒息\n先拨打119",
+            headline = "请先拨打119。",
             steps = listOf(
-                "发现地面裂缝、小落石或异常声响时，立即撤离。",
-                "不要停留在山谷、挡土墙或陡坡附近。",
-                "只使用安全的避难路线，尽量避免开车。",
-                "撤离后仍可能再次崩塌，请遵循官方指示。"
-            )
-        ),
-        DisasterId.Tsunami to DisasterText(
-            label = "海啸",
-            cardDescription = "海啸应对\n前往高处",
-            headline = "离开海岸和低洼地，前往高处。",
-            steps = listOf(
-                "地震后不要停留在海岸或河口附近。",
-                "确认广播和紧急警报后，立即前往高处。",
-                "如果车辆难以通行，也要步行前往更高地点。",
-                "在海啸警报解除前，请留在安全地点。"
-            )
-        ),
-        DisasterId.HeavySnow to DisasterText(
-            label = "大雪",
-            cardDescription = "积雪结冰\n交通和取暖安全",
-            headline = "减少外出，安全取暖并保持通风。",
-            steps = listOf(
-                "只在必要时外出，并避开结冰或积雪路段。",
-                "让可燃物远离取暖设备，并经常通风。",
-                "注意屋顶和阳台积雪坠落。",
-                "开车前检查除雪情况和轮胎状态。"
-            )
-        ),
-        DisasterId.HazardRelease to DisasterText(
-            label = "有害物质",
-            cardDescription = "化学或放射性物质\n室内避险和撤离",
-            headline = "按照官方指示，室内避险或向指定方向撤离。",
-            steps = listOf(
-                "优先遵循官方广播和紧急警报的指示。",
-                "室内避险时，关闭门窗并停止通风。",
-                "不要靠近或拍摄现场，可能存在暴露风险。",
-                "撤离时尽量减少皮肤暴露，并遵循去污指示。"
+                "请附近的人拨打119并取来AED。",
+                "检查反应和呼吸；没有呼吸时开始胸外按压。",
+                "严重出血时，用干净布料直接压迫止血。",
+                "疑似气道堵塞时，确认是否能咳嗽，并遵循119指示。"
             )
         ),
         DisasterId.Emergency to DisasterText(
@@ -523,10 +422,10 @@ private fun getDisasterById(id: DisasterId, language: AppLanguage = AppLanguage.
 private val TextQuickTags = listOf(
     QuickTag("tag-earthquake", "지진", DisasterId.Earthquake.id),
     QuickTag("tag-fire", "화재", DisasterId.Fire.id),
-    QuickTag("tag-blackout", "정전", DisasterId.HazardRelease.id),
-    QuickTag("tag-emergency-1", "응급", "emergency"),
-    QuickTag("tag-emergency-2", "응급", "emergency"),
-    QuickTag("tag-emergency-3", "응급", "emergency")
+    QuickTag("tag-blackout", "정전", DisasterId.Blackout.id),
+    QuickTag("tag-flood", "홍수", DisasterId.Flood.id),
+    QuickTag("tag-first-aid", "응급", DisasterId.FirstAid.id),
+    QuickTag("tag-unknown", "불명확", "emergency")
 )
 
 private data class AppStrings(
@@ -923,34 +822,25 @@ private fun localizedRecommendation(disasterId: DisasterId, language: AppLanguag
         AppLanguage.Korean -> when (disasterId) {
             DisasterId.Earthquake -> "구조물 균열과 낙하물 위험에 주의하세요."
             DisasterId.Fire -> "연기를 피해 낮은 자세로 빠르게 대피하세요."
+            DisasterId.Blackout -> "손전등을 켜고 전기 위험을 피하세요."
             DisasterId.Flood -> "높은 곳으로 이동하고 전기 제품에 주의하세요."
-            DisasterId.Typhoon -> "창문에서 떨어져 안전한 실내로 이동하세요."
-            DisasterId.Landslide -> "산 기슭이나 하천 근처를 피하세요."
-            DisasterId.Tsunami -> "즉시 높은 지대로 대피하세요."
-            DisasterId.HeavySnow -> "외출을 자제하고 보온에 신경쓰세요."
-            DisasterId.HazardRelease -> "즉시 환기하고 안전거리 확보하세요."
+            DisasterId.FirstAid -> "먼저 119에 전화하고 반응과 호흡을 확인하세요."
             DisasterId.Emergency -> "매뉴얼에서 해당 상황을 찾지 못했습니다. 즉시 119에 전화하세요."
         }
         AppLanguage.English -> when (disasterId) {
             DisasterId.Earthquake -> "Watch for structural cracks and falling objects."
             DisasterId.Fire -> "Stay low and evacuate quickly away from smoke."
+            DisasterId.Blackout -> "Use a flashlight and avoid electrical hazards."
             DisasterId.Flood -> "Move to higher ground and avoid electrical hazards."
-            DisasterId.Typhoon -> "Move away from windows and stay in a safe indoor area."
-            DisasterId.Landslide -> "Avoid mountain slopes, valleys, and river areas."
-            DisasterId.Tsunami -> "Evacuate to higher ground immediately."
-            DisasterId.HeavySnow -> "Avoid unnecessary travel and keep warm safely."
-            DisasterId.HazardRelease -> "Move upwind, keep distance, and call 119 if needed."
+            DisasterId.FirstAid -> "Call 119 first, then check response and breathing."
             DisasterId.Emergency -> "Not in manual. Call 119 immediately."
         }
         AppLanguage.Chinese -> when (disasterId) {
             DisasterId.Earthquake -> "注意建筑裂缝和坠落物。"
             DisasterId.Fire -> "避开烟雾，低姿势快速撤离。"
+            DisasterId.Blackout -> "打开手电筒，避开用电危险。"
             DisasterId.Flood -> "前往高处，避开电气危险。"
-            DisasterId.Typhoon -> "远离窗户，待在安全室内。"
-            DisasterId.Landslide -> "避开山坡、山谷和河流附近。"
-            DisasterId.Tsunami -> "立即撤离到高处。"
-            DisasterId.HeavySnow -> "避免不必要外出，并安全保暖。"
-            DisasterId.HazardRelease -> "向上风方向移动，保持距离，必要时拨打119。"
+            DisasterId.FirstAid -> "请先拨打119，然后检查反应和呼吸。"
             DisasterId.Emergency -> "手册中未找到。请立即拨打119。"
         }
     }
@@ -981,12 +871,9 @@ private fun detectDisasterFromKeywords(text: String): DisasterDetectResult {
     val types = listOf(
         DisasterDetectResult(DisasterId.Earthquake, "지진", 0.7, listOf("지진", "진동", "흔들", "흔들림", "진동이", "earthquake", "quake", "shake", "地震", "摇晃", "震动")),
         DisasterDetectResult(DisasterId.Fire, "화재", 0.7, listOf("불", "화재", "불이", "불나", "불이야", "연기", "화염", "불꽃", "fire", "smoke", "flame", "火灾", "着火", "烟", "火焰")),
+        DisasterDetectResult(DisasterId.Blackout, "정전", 0.7, listOf("정전", "단전", "전기", "불꺼", "불 꺼", "전기나감", "blackout", "power outage", "power", "停电", "断电")),
         DisasterDetectResult(DisasterId.Flood, "홍수", 0.7, listOf("물", "홍수", "침수", "물이", "물이차", "물이들어와", "flood", "water", "flooding", "洪水", "浸水", "积水")),
-        DisasterDetectResult(DisasterId.Typhoon, "태풍", 0.7, listOf("바람", "태풍", "강풍", "폭풍", "호우", "heavy rain", "typhoon", "wind", "storm", "台风", "强风", "暴风", "暴雨")),
-        DisasterDetectResult(DisasterId.Landslide, "산사태", 0.7, listOf("산사태", "붕괴", "무너지", "흙", "땅", "landslide", "山体滑坡", "滑坡", "塌方")),
-        DisasterDetectResult(DisasterId.Tsunami, "쓰나미", 0.7, listOf("쓰나미", "해일", "해일경보", "tsunami", "海啸")),
-        DisasterDetectResult(DisasterId.HeavySnow, "대설", 0.7, listOf("눈", "대설", "폭설", "눈사태", "빙판", "snow", "blizzard", "heavy snow", "大雪", "暴雪", "雪", "结冰")),
-        DisasterDetectResult(DisasterId.HazardRelease, "유해물질", 0.7, listOf("유해", "독", "가스", "가스누출", "가스냄새", "화학", "유출", "누출", "폭발", "hazard", "gas", "chemical", "有害", "煤气", "燃气", "化学", "泄漏", "爆炸"))
+        DisasterDetectResult(DisasterId.FirstAid, "응급", 0.7, listOf("응급", "심정지", "호흡", "숨", "출혈", "피", "기도", "목막", "choking", "bleeding", "cpr", "cardiac", "急救", "心脏骤停", "出血", "窒息"))
     )
 
     for (type in types) {
@@ -1031,15 +918,15 @@ private fun analyzeVoiceInputLocally(userInput: String): AnalysisResult {
 
     if (listOf("정전", "정전됐", "전기끌림", "정격", "blackout", "power", "전기나감").any { normalized.contains(it) }) {
         return AnalysisResult(
-            DisasterId.HazardRelease,
+            DisasterId.Blackout,
             "보안등과 휴대폰 손전등을 켜고 천천히 움직이세요."
         )
     }
 
-    if (listOf("쓰나미", "해일", "해일경보", "밀려온다", "tsunami", "wave").any { normalized.contains(it) }) {
+    if (listOf("응급", "심정지", "호흡", "숨", "출혈", "기도", "목막", "cpr", "choking", "bleeding").any { normalized.contains(it) }) {
         return AnalysisResult(
-            DisasterId.Tsunami,
-            "해안 주민은 즉시 높은 지대로 대피하세요."
+            DisasterId.FirstAid,
+            "먼저 119에 전화하고 반응과 호흡을 확인하세요."
         )
     }
 
@@ -1050,7 +937,9 @@ private fun analyzeCapturedImage(uri: String, language: AppLanguage): AnalysisRe
     val normalizedUri = uri.lowercase(Locale.getDefault())
     val rules = listOf(
         Pair(listOf("fire", "flame", "smoke", "화재", "불"), DisasterId.Fire),
+        Pair(listOf("blackout", "power", "정전", "단전"), DisasterId.Blackout),
         Pair(listOf("flood", "rain", "water", "침수", "홍수"), DisasterId.Flood),
+        Pair(listOf("firstaid", "first_aid", "cpr", "응급", "심정지"), DisasterId.FirstAid),
         Pair(listOf("quake", "earth", "crack", "지진", "붕괴"), DisasterId.Earthquake)
     )
 
@@ -1075,8 +964,9 @@ private fun analyzeTextQuery(inputText: String, selectedTag: String): AnalysisRe
 
     val rules = listOf(
         Pair(listOf("화재", "불", "불나", "불이야", "연기", "화염", "불꽃", "smoke", "fire"), DisasterId.Fire),
+        Pair(listOf("정전", "단전", "전기", "blackout", "power outage", "power"), DisasterId.Blackout),
         Pair(listOf("홍수", "침수", "물이", "물이차", "물이들어와", "flood", "water"), DisasterId.Flood),
-        Pair(listOf("태풍", "강풍", "폭풍", "호우", "typhoon", "wind"), DisasterId.Typhoon),
+        Pair(listOf("응급", "심정지", "호흡", "출혈", "기도", "choking", "bleeding", "cpr"), DisasterId.FirstAid),
         Pair(listOf("지진", "진동", "흔들", "붕괴", "quake", "earth", "shake"), DisasterId.Earthquake)
     )
 
@@ -1084,8 +974,9 @@ private fun analyzeTextQuery(inputText: String, selectedTag: String): AnalysisRe
         if (keywords.any { normalized.contains(it) }) {
             val warning = when (disasterId) {
                 DisasterId.Fire -> "연기 유입을 막고 낮은 자세로 비상구 방향으로 이동하세요."
+                DisasterId.Blackout -> "손전등을 켜고 젖은 손으로 전기기기를 만지지 마세요."
                 DisasterId.Flood -> "급류 구간과 맨홀 주변을 피하고 높은 위치로 이동하세요."
-                DisasterId.Typhoon -> "창문 주변에서 떨어지고 낙하물 위험 지역을 피하세요."
+                DisasterId.FirstAid -> "먼저 119에 전화하고 반응과 호흡을 확인하세요."
                 DisasterId.Earthquake -> "지진 심한 경우 건물이 무너질수 있어요!"
                 else -> "정확한 위치와 주변 위험요소를 계속 공유해 주세요."
             }
@@ -1660,12 +1551,9 @@ private class OfflineLlmManager(private val context: Context) {
     private val textCategories = listOf(
         Pair("지진", "튼튼한 책상 아래로 숨어 머리를 보호하세요."),
         Pair("화재", "낮은 자세로 연기를 피해 빠르게 대피하세요."),
+        Pair("정전", "손전등을 켜고 전기 위험을 피하세요."),
         Pair("홍수", "높은 곳으로 즉시 이동하세요."),
-        Pair("태풍", "창문에서 떨어져 안전한 실내로 이동하세요."),
-        Pair("산사태", "산 기슭을 피하고 높은 곳으로 이동하세요."),
-        Pair("쓰나미", "즉시 높은 지대(30m 이상)로 대피하세요."),
-        Pair("대설", "외출을 자제하고 실내에서 대기하세요."),
-        Pair("위험물", "바람 방향 반대로 대피하고 119에 신고하세요."),
+        Pair("응급", "먼저 119에 전화하고 반응과 호흡을 확인하세요."),
         Pair("119", "매뉴얼에서 해당 상황을 찾지 못했습니다. 즉시 119에 전화하세요.")
     )
 
@@ -1678,15 +1566,9 @@ private class OfflineLlmManager(private val context: Context) {
         try {
             withContext(Dispatchers.IO) {
                 llama.close()
-                val downloadUrl = URL(MODEL_DOWNLOAD_URL)
-                val connection = downloadUrl.openConnection() as java.net.HttpURLConnection
+                val target = findHuggingFaceModelTarget()
+                val connection = openHuggingFaceDownload(target.url)
                 try {
-                    connection.instanceFollowRedirects = true
-                    connection.connectTimeout = 30000
-                    connection.readTimeout = 30000
-                    connection.setRequestProperty("User-Agent", "ResQ/1.0")
-                    connection.connect()
-
                     if (connection.responseCode !in 200..299) {
                         throw IllegalStateException("모델 다운로드 실패: ${connection.responseCode}")
                     }
@@ -1720,7 +1602,7 @@ private class OfflineLlmManager(private val context: Context) {
                     if (!tempFile.renameTo(modelFile)) {
                         throw IllegalStateException("모델 파일 저장에 실패했습니다.")
                     }
-                    verifyModelFile(modelFile)
+                    verifyDownloadedModelFile(modelFile, target.expectedBytes)
                 } finally {
                     connection.disconnect()
                 }
@@ -1805,7 +1687,7 @@ private class OfflineLlmManager(private val context: Context) {
             if (!tempFile.renameTo(modelFile)) {
                 throw IllegalStateException("내장 LLM 모델 파일 저장에 실패했습니다.")
             }
-            verifyModelFile(modelFile)
+            verifyBundledModelFile(modelFile)
         } catch (err: Exception) {
             if (tempFile.exists()) {
                 tempFile.delete()
@@ -1827,9 +1709,91 @@ private class OfflineLlmManager(private val context: Context) {
         }
     }
 
-    private fun verifyModelFile(file: File) {
+    private data class ModelDownloadTarget(
+        val fileName: String,
+        val url: URL,
+        val expectedBytes: Long?
+    )
+
+    private fun findHuggingFaceModelTarget(): ModelDownloadTarget {
+        return try {
+            val connection = (URL(HF_MODEL_API_URL).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 30000
+                readTimeout = 30000
+                setRequestProperty("User-Agent", "ResQ/1.0")
+                setRequestProperty("Accept", "application/json")
+            }
+
+            try {
+                val body = connection.inputStream.bufferedReader().use { it.readText() }
+                val siblings = JSONObject(body).optJSONArray("siblings") ?: JSONArray()
+                for (candidate in HF_MODEL_CANDIDATES) {
+                    for (index in 0 until siblings.length()) {
+                        val sibling = siblings.optJSONObject(index) ?: continue
+                        if (sibling.optString("rfilename") == candidate) {
+                            return ModelDownloadTarget(
+                                fileName = candidate,
+                                url = huggingFaceResolveUrl(candidate),
+                                expectedBytes = sibling.optLong("size", -1L).takeIf { it > 0L }
+                            )
+                        }
+                    }
+                }
+            } finally {
+                connection.disconnect()
+            }
+            fallbackHuggingFaceModelTarget()
+        } catch (err: Exception) {
+            Log.w("ResQApp-LLM", "Hugging Face 모델 목록 조회 실패, 기본 파일로 다운로드합니다: ${err.message}")
+            fallbackHuggingFaceModelTarget()
+        }
+    }
+
+    private fun fallbackHuggingFaceModelTarget(): ModelDownloadTarget {
+        val fileName = HF_MODEL_CANDIDATES.first()
+        return ModelDownloadTarget(fileName, huggingFaceResolveUrl(fileName), null)
+    }
+
+    private fun huggingFaceResolveUrl(fileName: String): URL {
+        return URL("https://huggingface.co/$HF_MODEL_REPO_ID/resolve/main/$fileName")
+    }
+
+    private fun openHuggingFaceDownload(initialUrl: URL): HttpURLConnection {
+        var currentUrl = initialUrl
+        var redirects = 0
+        while (redirects < 8) {
+            val connection = (currentUrl.openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                connectTimeout = 60000
+                readTimeout = 120000
+                setRequestProperty("User-Agent", "ResQ/1.0")
+                setRequestProperty("Accept", "application/octet-stream")
+            }
+            val code = connection.responseCode
+            if (code in 300..399) {
+                val location = connection.getHeaderField("Location")
+                    ?: throw IllegalStateException("Hugging Face 리다이렉트 위치가 없습니다.")
+                connection.disconnect()
+                currentUrl = URL(currentUrl, location)
+                redirects += 1
+                continue
+            }
+            return connection
+        }
+        throw IllegalStateException("Hugging Face 모델 다운로드 리다이렉트가 너무 많습니다.")
+    }
+
+    private fun verifyDownloadedModelFile(file: File, expectedBytes: Long?) {
+        val minimumBytes = expectedBytes?.let { (it * 9L) / 10L } ?: MIN_HF_MODEL_BYTES
+        if (file.length() < minimumBytes) {
+            file.delete()
+            throw IllegalStateException("Hugging Face 모델 파일이 너무 작습니다. 다시 다운로드해 주세요.")
+        }
+    }
+
+    private fun verifyBundledModelFile(file: File) {
         val actual = sha256(file)
-        if (!actual.equals(EXPECTED_MODEL_SHA256, ignoreCase = true)) {
+        if (!actual.equals(EXPECTED_BUNDLED_MODEL_SHA256, ignoreCase = true)) {
             file.delete()
             throw IllegalStateException("모델 파일 검증에 실패했습니다. 다시 다운로드해 주세요.")
         }
@@ -1872,20 +1836,23 @@ private class OfflineLlmManager(private val context: Context) {
     suspend fun analyzeForTextQuery(prompt: String): Pair<String, String> {
         return withContext(Dispatchers.Default) {
             try {
-                // LLM 프롬프트로 재난 카테고리 판단
+                val regexCategory = fallbackTextCategory(prompt)
+                if (regexCategory.first != "119") {
+                    Log.d("ResQApp-LLM", "regex 라우팅 결과: ${regexCategory.first}")
+                    return@withContext regexCategory
+                }
+
+                // regex로 불명확한 입력만 LLM 분류로 넘긴다.
                 val classificationPrompt = """다음 중 하나의 숫자만 답하세요.
 
 입력: "$prompt"
 
 1=지진(earthquake)
 2=화재(fire, smoke, flames)
-3=홍수(flood)
-4=태풍(typhoon, storm)
-5=산사태(landslide)
-6=쓰나미(tsunami)
-7=대설(heavy snow, blizzard)
-8=위험물(chemical, gas)
-9=매뉴얼에 없는 비재난 질문(none, not disaster)
+3=정전(blackout, power outage)
+4=홍수(flood)
+5=응급/심정지(first aid, cardiac arrest, choking, bleeding)
+6=불명확 또는 매뉴얼에 없는 질문(none, not disaster)
 """.trimIndent()
 
                 if (!_state.value.isInitialized) {
@@ -1915,20 +1882,17 @@ private class OfflineLlmManager(private val context: Context) {
                     ?: when {
                         normalized.contains("지진") || normalized.contains("earthquake") || normalized.contains("地震") -> 1
                         normalized.contains("화재") || normalized.contains("fire") || normalized.contains("火灾") || normalized.contains("着火") -> 2
-                        normalized.contains("홍수") || normalized.contains("flood") || normalized.contains("洪水") || normalized.contains("浸水") -> 3
-                        normalized.contains("태풍") || normalized.contains("typhoon") || normalized.contains("台风") -> 4
-                        normalized.contains("산사태") || normalized.contains("landslide") || normalized.contains("滑坡") || normalized.contains("塌方") -> 5
-                        normalized.contains("쓰나미") || normalized.contains("tsunami") || normalized.contains("해일") || normalized.contains("海啸") -> 6
-                        normalized.contains("대설") || normalized.contains("폭설") || normalized.contains("heavy snow") || normalized.contains("大雪") -> 7
-                        normalized.contains("위험물") || normalized.contains("hazard") || normalized.contains("chemical") || normalized.contains("有害") || normalized.contains("燃气") || normalized.contains("煤气") -> 8
-                        normalized.contains("none") || normalized.contains("not disaster") || normalized.contains("비재난") || normalized.contains("없음") -> 9
+                        normalized.contains("정전") || normalized.contains("blackout") || normalized.contains("power outage") || normalized.contains("停电") -> 3
+                        normalized.contains("홍수") || normalized.contains("flood") || normalized.contains("洪水") || normalized.contains("浸水") -> 4
+                        normalized.contains("응급") || normalized.contains("심정지") || normalized.contains("first aid") || normalized.contains("cardiac") || normalized.contains("choking") || normalized.contains("bleeding") -> 5
+                        normalized.contains("none") || normalized.contains("not disaster") || normalized.contains("비재난") || normalized.contains("없음") -> 6
                         else -> fallbackTextCategory(prompt).let { fallback ->
                             return@withContext fallback
                         }
                     }
                 Log.d("ResQApp-LLM", "파싱된 카테고리 번호: $categoryNum")
 
-                val selectedCategory = if (categoryNum in 1..9) {
+                val selectedCategory = if (categoryNum in 1..6) {
                     textCategories[categoryNum - 1]
                 } else {
                     fallbackTextCategory(prompt)
@@ -1950,13 +1914,10 @@ private class OfflineLlmManager(private val context: Context) {
         val index = when (quick.id) {
             DisasterId.Earthquake -> 0
             DisasterId.Fire -> 1
-            DisasterId.Flood -> 2
-            DisasterId.Typhoon -> 3
-            DisasterId.Landslide -> 4
-            DisasterId.Tsunami -> 5
-            DisasterId.HeavySnow -> 6
-            DisasterId.HazardRelease -> 7
-            DisasterId.Emergency -> 8
+            DisasterId.Blackout -> 2
+            DisasterId.Flood -> 3
+            DisasterId.FirstAid -> 4
+            DisasterId.Emergency -> 5
         }
         return textCategories[index]
     }
@@ -1979,7 +1940,7 @@ private class OfflineLlmManager(private val context: Context) {
     companion object {
         private const val MODEL_NAME = "gemma-4-E2B-it-IQ4_XS.gguf"
         private const val BUNDLED_MODEL_ASSET = "llm/gemma-4-E2B-it-IQ4_XS.gguf"
-        private const val EXPECTED_MODEL_SHA256 = "d50db8b4573839fb4a3a5e66342bb9977da4e821992ad722974359504f1d4ed3"
+        private const val EXPECTED_BUNDLED_MODEL_SHA256 = "d50db8b4573839fb4a3a5e66342bb9977da4e821992ad722974359504f1d4ed3"
     }
 
 
@@ -2817,12 +2778,9 @@ private suspend fun analyzeTextQueryWithLLM(
         val disasterId = when (disasterType) {
             "지진", "Earthquake", "地震" -> DisasterId.Earthquake
             "화재", "Fire", "火灾" -> DisasterId.Fire
+            "정전", "Blackout", "停电" -> DisasterId.Blackout
             "홍수", "Flood", "洪水" -> DisasterId.Flood
-            "태풍", "Typhoon", "台风" -> DisasterId.Typhoon
-            "산사태", "Landslide", "山体滑坡" -> DisasterId.Landslide
-            "쓰나미", "Tsunami", "海啸" -> DisasterId.Tsunami
-            "대설", "Heavy Snow", "大雪" -> DisasterId.HeavySnow
-            "위험물", "Hazardous Material", "有害物质" -> DisasterId.HazardRelease
+            "응급", "First Aid", "急救" -> DisasterId.FirstAid
             "119", "Emergency" -> DisasterId.Emergency
             else -> DisasterId.Emergency
         }
