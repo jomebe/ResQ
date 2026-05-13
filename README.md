@@ -12,18 +12,20 @@ instead of letting the model improvise.
 - Android app built with Kotlin and Jetpack Compose.
 - On-device Gemma 4 E2B GGUF inference through `llama.cpp`.
 - Supported UI/input languages: Korean, English, Chinese.
-- Disaster cards: earthquake, fire, flood, typhoon, landslide, tsunami, heavy
-  snow, hazardous material, and a 119 fallback card.
+- Disaster cards: earthquake, fire, blackout, flood, first aid, and a 119
+  fallback card.
 - Emergency controls: 119 dial intent, flashlight toggle, and siren tone.
 - Voice input uses Android `SpeechRecognizer`; TTS uses Android
   `TextToSpeech`.
 
 ## Safety Guardrails
 
-- Keyword routing runs before model classification.
+- Keyword routing runs before model classification; unclear text is then sent to
+  the local model classifier.
 - Unknown or out-of-domain inputs route to the 119 fallback card.
-- Bundled and downloaded model files are checked against a pinned SHA-256
-  digest before loading.
+- The bundled model is checked against a pinned SHA-256 digest. Hugging Face
+  downloads are discovered through the Hugging Face model API and checked for a
+  plausible model file size before loading.
 - The fallback copy is fixed:
   `Not in manual. Call 119 immediately.`
 - The UI shows a source line for Korean public disaster and 119 safety guidance
@@ -55,9 +57,16 @@ The app expects the Gemma GGUF model at:
 app/src/main/assets/llm/gemma-4-E2B-it-IQ4_XS.gguf
 ```
 
-The settings screen can also attempt to download the same model into app-local
-storage. If the model file changes, update the pinned SHA-256 in
-`OfflineLlmManager` before shipping.
+The settings screen can also find and download the model from Hugging Face into
+app-local storage. Current preferred source:
+
+```text
+unsloth/gemma-4-E2B-it-GGUF
+gemma-4-E2B-it-UD-Q4_K_XL.gguf
+```
+
+The app falls back to `gemma-4-E2B-it-IQ4_XS.gguf` if the preferred file is not
+listed by the Hugging Face API.
 
 ## License
 
