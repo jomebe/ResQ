@@ -22,6 +22,8 @@ instead of letting the model improvise.
 
 - Keyword routing runs before model classification.
 - Unknown or out-of-domain inputs route to the 119 fallback card.
+- Bundled and downloaded model files are checked against a pinned SHA-256
+  digest before loading.
 - The fallback copy is fixed:
   `Not in manual. Call 119 immediately.`
 - The UI shows a source line for Korean public disaster and 119 safety guidance
@@ -54,7 +56,8 @@ app/src/main/assets/llm/gemma-4-E2B-it-IQ4_XS.gguf
 ```
 
 The settings screen can also attempt to download the same model into app-local
-storage.
+storage. If the model file changes, update the pinned SHA-256 in
+`OfflineLlmManager` before shipping.
 
 ## License
 
