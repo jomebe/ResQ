@@ -95,6 +95,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.example.resq.ui.theme.ResQFontFamily
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -2101,6 +2102,7 @@ private class OfflineLlmManager(context: Context) {
 private class VoiceInputController(private val context: Context) {
     val scope = kotlinx.coroutines.CoroutineScope(Dispatchers.Main)
     private val speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+    private var pendingResult: CompletableDeferred<String?>? = null
 
     private val _recognizedText = MutableStateFlow("")
     val recognizedText: StateFlow<String> = _recognizedText
@@ -2130,6 +2132,8 @@ private class VoiceInputController(private val context: Context) {
             override fun onError(error: Int) {
                 _error.value = "음성 인식 오류: $error"
                 _isListening.value = false
+                pendingResult?.complete(_recognizedText.value.ifBlank { null })
+                pendingResult = null
             }
 
             override fun onResults(results: android.os.Bundle?) {
@@ -2137,6 +2141,9 @@ private class VoiceInputController(private val context: Context) {
                 if (!matches.isNullOrEmpty()) {
                     _recognizedText.value = matches[0]
                 }
+                _isListening.value = false
+                pendingResult?.complete(_recognizedText.value.ifBlank { null })
+                pendingResult = null
             }
 
             override fun onPartialResults(partialResults: android.os.Bundle?) {
@@ -2155,7 +2162,14 @@ private class VoiceInputController(private val context: Context) {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, language.recognizerTag)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language.recognizerTag)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(
+                RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS,
+                if (language == AppLanguage.English) 5000L else 3500L
+            )
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
         }
     }
 
@@ -2172,14 +2186,27 @@ private class VoiceInputController(private val context: Context) {
     }
 
     suspend fun recordAndAnalyze(language: AppLanguage): String? {
+        pendingResult?.cancel()
+        val result = CompletableDeferred<String?>()
+        pendingResult = result
         startListening(language)
-        delay(3000)
+        val timeoutMs = if (language == AppLanguage.English) 9000L else 7000L
+        val firstResult = withTimeoutOrNull(timeoutMs) {
+            result.await()
+        }
         stopListening()
-        delay(500)
-        return _recognizedText.value.ifBlank { null }
+        val transcript = firstResult ?: withTimeoutOrNull(1500L) {
+            result.await()
+        } ?: _recognizedText.value.ifBlank { null }
+        if (pendingResult === result) {
+            pendingResult = null
+        }
+        return transcript
     }
 
     fun destroy() {
+        pendingResult?.cancel()
+        pendingResult = null
         speechRecognizer.destroy()
         scope.cancel()
     }
