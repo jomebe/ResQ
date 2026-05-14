@@ -19,7 +19,6 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.util.Log
-import java.net.HttpURLConnection
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -89,31 +88,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.example.resq.ui.theme.ResQFontFamily
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.FileOutputStream
-import java.net.URL
-import java.security.MessageDigest
 import java.util.Locale
-import org.json.JSONObject
-import org.json.JSONArray
-
-private const val HF_MODEL_REPO_ID = "unsloth/gemma-4-E2B-it-GGUF"
-private const val HF_MODEL_API_URL = "https://huggingface.co/api/models/$HF_MODEL_REPO_ID?blobs=true"
-private const val MIN_HF_MODEL_BYTES = 2_000_000_000L
-private val HF_MODEL_CANDIDATES = listOf(
-    "gemma-4-E2B-it-UD-Q4_K_XL.gguf",
-    "gemma-4-E2B-it-IQ4_XS.gguf"
-)
+import java.util.UUID
 
 private enum class Screen {
     Onboard,
@@ -181,6 +179,64 @@ private data class VoiceAnalysisResult(
 )
 
 private data class AlertState(val title: String, val message: String)
+
+private data class EmergencyContact(
+    val countryCode: String,
+    val number: String
+)
+
+private val EmergencyNumberByCountry = mapOf(
+    "KR" to "119",
+    "US" to "911",
+    "CA" to "911",
+    "JP" to "119",
+    "CN" to "119",
+    "TW" to "119",
+    "GB" to "999",
+    "IE" to "999",
+    "AU" to "000",
+    "NZ" to "111",
+    "IN" to "112",
+    "SG" to "995",
+    "HK" to "999",
+    "DE" to "112",
+    "FR" to "112",
+    "IT" to "112",
+    "ES" to "112",
+    "NL" to "112",
+    "SE" to "112",
+    "NO" to "112",
+    "DK" to "112",
+    "FI" to "112",
+    "PL" to "112",
+    "PT" to "112",
+    "BR" to "193",
+    "MX" to "911",
+    "PH" to "911",
+    "TH" to "191",
+    "VN" to "114",
+    "ID" to "112",
+    "MY" to "999"
+)
+
+private fun emergencyContactFor(context: Context, language: AppLanguage): EmergencyContact {
+    val localeCountry = context.resources.configuration.locales[0]?.country
+        ?.takeIf { it.isNotBlank() }
+        ?: Locale.getDefault().country
+    val countryCode = localeCountry.uppercase(Locale.US)
+    val number = EmergencyNumberByCountry[countryCode] ?: fallbackEmergencyNumber(language)
+    return EmergencyContact(countryCode, number)
+}
+
+private fun fallbackEmergencyNumber(language: AppLanguage): String {
+    return when (language) {
+        AppLanguage.Korean -> "119"
+        AppLanguage.English -> "911"
+        AppLanguage.Chinese -> "119"
+    }
+}
+
+private fun String.withEmergencyNumber(number: String): String = replace("119", number)
 
 private val DisasterCatalog = listOf(
     DisasterDefinition(
@@ -406,22 +462,36 @@ private val DisasterTranslations = mapOf(
     )
 )
 
-private fun DisasterDefinition.localized(language: AppLanguage): DisasterDefinition {
-    val translated = DisasterTranslations[language]?.get(id) ?: return this
+private fun DisasterDefinition.withEmergencyNumber(number: String): DisasterDefinition {
+    return copy(
+        label = label.withEmergencyNumber(number),
+        cardDescription = cardDescription.withEmergencyNumber(number),
+        headline = headline.withEmergencyNumber(number),
+        steps = steps.map { it.withEmergencyNumber(number) }
+    )
+}
+
+private fun DisasterDefinition.localized(language: AppLanguage, emergencyNumber: String): DisasterDefinition {
+    val translated = DisasterTranslations[language]?.get(id) ?: return withEmergencyNumber(emergencyNumber)
     return copy(
         label = translated.label,
         cardDescription = translated.cardDescription,
         headline = translated.headline,
         steps = translated.steps
-    )
+    ).withEmergencyNumber(emergencyNumber)
 }
 
-private fun localizedDisasterCatalog(language: AppLanguage): List<DisasterDefinition> {
-    return DisasterCatalog.map { it.localized(language) }
+private fun localizedDisasterCatalog(language: AppLanguage, emergencyNumber: String): List<DisasterDefinition> {
+    return DisasterCatalog.map { it.localized(language, emergencyNumber) }
 }
 
-private fun getDisasterById(id: DisasterId, language: AppLanguage = AppLanguage.Korean): DisasterDefinition {
-    return (DisasterCatalog.firstOrNull { it.id == id } ?: DisasterCatalog.first()).localized(language)
+private fun getDisasterById(
+    id: DisasterId,
+    language: AppLanguage = AppLanguage.Korean,
+    emergencyNumber: String = "119"
+): DisasterDefinition {
+    return (DisasterCatalog.firstOrNull { it.id == id } ?: DisasterCatalog.first())
+        .localized(language, emergencyNumber)
 }
 
 private val TextQuickTags = listOf(
@@ -822,7 +892,11 @@ private fun localizedGuidanceTitle(titleKey: String?, language: AppLanguage): St
     }
 }
 
-private fun localizedRecommendation(disasterId: DisasterId, language: AppLanguage): String {
+private fun localizedRecommendation(
+    disasterId: DisasterId,
+    language: AppLanguage,
+    emergencyNumber: String = "119"
+): String {
     return when (language) {
         AppLanguage.Korean -> when (disasterId) {
             DisasterId.Earthquake -> "구조물 균열과 낙하물 위험에 주의하세요."
@@ -848,12 +922,22 @@ private fun localizedRecommendation(disasterId: DisasterId, language: AppLanguag
             DisasterId.FirstAid -> "请先拨打119，然后检查反应和呼吸。"
             DisasterId.Emergency -> "手册中未找到。请立即拨打119。"
         }
-    }
+    }.withEmergencyNumber(emergencyNumber)
 }
 
-private fun localizedWarning(warning: String?, disasterId: DisasterId, language: AppLanguage): String? {
+private fun localizedWarning(
+    warning: String?,
+    disasterId: DisasterId,
+    language: AppLanguage,
+    emergencyNumber: String
+): String? {
     if (warning.isNullOrBlank()) return null
-    return if (language == AppLanguage.Korean) warning else localizedRecommendation(disasterId, language)
+    val text = if (language == AppLanguage.Korean) {
+        warning
+    } else {
+        localizedRecommendation(disasterId, language, emergencyNumber)
+    }
+    return text.withEmergencyNumber(emergencyNumber)
 }
 
 private fun guidanceSpeechText(
@@ -938,7 +1022,11 @@ private fun analyzeVoiceInputLocally(userInput: String): AnalysisResult {
     return AnalysisResult(DisasterId.Emergency, localizedRecommendation(DisasterId.Emergency, AppLanguage.Korean))
 }
 
-private fun analyzeCapturedImage(uri: String, language: AppLanguage): AnalysisResult {
+private fun analyzeCapturedImage(
+    uri: String,
+    language: AppLanguage,
+    emergencyNumber: String
+): AnalysisResult {
     val normalizedUri = uri.lowercase(Locale.getDefault())
     val rules = listOf(
         Pair(listOf("fire", "flame", "smoke", "화재", "불"), DisasterId.Fire),
@@ -950,12 +1038,12 @@ private fun analyzeCapturedImage(uri: String, language: AppLanguage): AnalysisRe
 
     for ((keywords, disasterId) in rules) {
         if (keywords.any { normalizedUri.contains(it) }) {
-            val warning = localizedRecommendation(disasterId, language)
+            val warning = localizedRecommendation(disasterId, language, emergencyNumber)
             return AnalysisResult(disasterId, warning)
         }
     }
 
-    return AnalysisResult(DisasterId.Emergency, localizedRecommendation(DisasterId.Emergency, language))
+    return AnalysisResult(DisasterId.Emergency, localizedRecommendation(DisasterId.Emergency, language, emergencyNumber))
 }
 
 private fun analyzeTextQuery(inputText: String, selectedTag: String): AnalysisResult {
@@ -1029,6 +1117,7 @@ fun ResQApp() {
     var pendingMicLaunch by remember { mutableStateOf(false) }
     var isTorchOn by remember { mutableStateOf(false) }
     val strings = appStrings(language)
+    val emergencyContact = remember(language) { emergencyContactFor(context, language) }
 
     fun navigateBackFromCurrentScreen() {
         when (screen) {
@@ -1100,7 +1189,7 @@ fun ResQApp() {
             statusText = "online"
             screen = Screen.CameraLoading
             delay(600)
-            val result = analyzeCapturedImage(capturedUri.toString(), language)
+            val result = analyzeCapturedImage(capturedUri.toString(), language, emergencyContact.number)
             selectedDisasterId = result.disasterId
             guidanceTitle = "camera"
             analysisWarning = result.warning
@@ -1158,6 +1247,7 @@ fun ResQApp() {
                 voiceController = voiceController,
                 offlineLlm = offlineLlm,
                 language = language,
+                emergencyNumber = emergencyContact.number,
                 onStart = { isListening = true },
                 onStop = { isListening = false },
                 onAlert = { title, message -> alertState = AlertState(title, message) },
@@ -1211,10 +1301,10 @@ fun ResQApp() {
         }
     }
 
-    LaunchedEffect(screen, selectedDisasterId, analysisWarning, language, ttsEnabled, voiceType) {
+    LaunchedEffect(screen, selectedDisasterId, analysisWarning, language, emergencyContact.number, ttsEnabled, voiceType) {
         if (screen == Screen.Guidance && ttsEnabled) {
-            val disaster = getDisasterById(selectedDisasterId, language)
-            val warning = localizedWarning(analysisWarning, selectedDisasterId, language)
+            val disaster = getDisasterById(selectedDisasterId, language, emergencyContact.number)
+            val warning = localizedWarning(analysisWarning, selectedDisasterId, language, emergencyContact.number)
             ttsController.speak(guidanceSpeechText(language, disaster, warning), language, voiceType)
         } else if (!ttsEnabled) {
             ttsController.stop()
@@ -1252,6 +1342,7 @@ fun ResQApp() {
                             voiceController = voiceController,
                             offlineLlm = offlineLlm,
                             language = language,
+                            emergencyNumber = emergencyContact.number,
                             onStart = { isListening = true },
                             onStop = { isListening = false },
                             onAlert = { title, message -> alertState = AlertState(title, message) },
@@ -1299,7 +1390,7 @@ fun ResQApp() {
             )
             Screen.Disaster -> DisasterScreen(
                 language = language,
-                catalog = localizedDisasterCatalog(language),
+                catalog = localizedDisasterCatalog(language, emergencyContact.number),
                 onBack = {
                     screen = if (disasterPickerSource == "guidance") {
                         Screen.Guidance
@@ -1341,7 +1432,8 @@ fun ResQApp() {
                             val result = analyzeTextQueryWithLLM(
                                 trimmed,
                                 offlineLlm,
-                                language
+                                language,
+                                emergencyContact.number
                             )
                             selectedDisasterId = result.disasterId
                             guidanceTitle = "text"
@@ -1406,10 +1498,11 @@ fun ResQApp() {
             )
             Screen.Guidance -> GuidanceScreen(
                 language = language,
-                disaster = getDisasterById(selectedDisasterId, language),
+                disaster = getDisasterById(selectedDisasterId, language, emergencyContact.number),
                 title = localizedGuidanceTitle(guidanceTitle, language),
                 statusText = localizedStatusText(statusText, language),
-                warning = localizedWarning(analysisWarning, selectedDisasterId, language),
+                warning = localizedWarning(analysisWarning, selectedDisasterId, language, emergencyContact.number),
+                emergencyNumber = emergencyContact.number,
                 isTorchOn = isTorchOn,
                 onBack = {
                     if (guidanceBackTarget == "text_query") {
@@ -1474,6 +1567,7 @@ private fun startVoiceFlow(
     voiceController: VoiceInputController,
     offlineLlm: OfflineLlmManager,
     language: AppLanguage,
+    emergencyNumber: String,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onAlert: (String, String) -> Unit,
@@ -1490,17 +1584,17 @@ private fun startVoiceFlow(
                 return@launch
             }
 
-            val analysis = offlineLlm.analyzeDisaster(transcript, language)
+            val analysis = offlineLlm.analyzeDisaster(transcript, language, emergencyNumber)
             val quickDetection = detectDisasterFromKeywords(transcript)
             val chosenId = analysis?.disasterId ?: quickDetection.id
-            val chosen = getDisasterById(chosenId, language)
+            val chosen = getDisasterById(chosenId, language, emergencyNumber)
 
             onResult(
                 VoiceAnalysisResult(
                     recognizedText = transcript,
                     disasterId = chosenId,
                     disasterLabel = chosen.label,
-                    recommendation = analysis?.recommendation ?: localizedRecommendation(chosenId, language),
+                    recommendation = analysis?.recommendation ?: localizedRecommendation(chosenId, language, emergencyNumber),
                     confidence = analysis?.confidence ?: quickDetection.confidence
                 )
             )
@@ -1523,8 +1617,8 @@ private fun createCameraUri(context: Context): Uri {
     )
 }
 
-private fun open119Dialer(context: Context) {
-    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:119"))
+private fun openEmergencyDialer(context: Context, emergencyNumber: String) {
+    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$emergencyNumber"))
     context.startActivity(intent)
 }
 
@@ -1602,7 +1696,8 @@ private data class OfflineLlmState(
     val downloadProgress: Int
 )
 
-private class OfflineLlmManager(private val context: Context) {
+private class OfflineLlmManager(context: Context) {
+    private val context = context.applicationContext
     private val _state = MutableStateFlow(
         OfflineLlmState(
             isInitialized = false,
@@ -1613,8 +1708,15 @@ private class OfflineLlmManager(private val context: Context) {
     )
     val state: StateFlow<OfflineLlmState> = _state
 
-    private val modelFile = File(context.filesDir, MODEL_NAME)
+    private val modelFile = llmModelFile(this.context)
+    private val tempModelFile = llmTempModelFile(this.context)
+    private val workManager = WorkManager.getInstance(this.context)
+    private val managerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val loadMutex = Mutex()
     private val llama = LlamaNative()
+    private var loadedDownloadWorkId: UUID? = null
+    private var lastFinishedWorkId: UUID? = null
+    private var observedActiveWorkId: UUID? = null
     private val textCategories = listOf(
         Pair("지진", "튼튼한 책상 아래로 숨어 머리를 보호하세요."),
         Pair("화재", "낮은 자세로 연기를 피해 빠르게 대피하세요."),
@@ -1624,59 +1726,148 @@ private class OfflineLlmManager(private val context: Context) {
         Pair("119", "매뉴얼에서 해당 상황을 찾지 못했습니다. 즉시 119에 전화하세요.")
     )
 
+    init {
+        managerScope.launch {
+            monitorDownloadWork()
+        }
+    }
+
+    private suspend fun enqueueDownloadWork(request: androidx.work.OneTimeWorkRequest) {
+        withContext(Dispatchers.IO) {
+            workManager.enqueueUniqueWork(
+                MODEL_DOWNLOAD_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                request
+            ).result.get()
+        }
+    }
+
+    private suspend fun cancelDownloadWork() {
+        withContext(Dispatchers.IO) {
+            workManager.cancelUniqueWork(MODEL_DOWNLOAD_WORK_NAME).result.get()
+        }
+    }
+
+    private suspend fun waitForDownloadResult(workId: UUID): WorkInfo {
+        while (true) {
+            val info = withContext(Dispatchers.IO) {
+                workManager.getWorkInfoById(workId).get()
+            } ?: throw IllegalStateException("모델 다운로드 작업을 찾지 못했습니다.")
+
+            applyDownloadWorkInfo(info)
+            if (info.state.isFinished) {
+                return info
+            }
+            delay(1000)
+        }
+    }
+
+    private suspend fun monitorDownloadWork() {
+        while (true) {
+            val info = currentDownloadWorkInfo()
+            if (info != null) {
+                if (!info.state.isFinished) {
+                    observedActiveWorkId = info.id
+                }
+                applyDownloadWorkInfo(info)
+                if (info.state.isFinished && observedActiveWorkId == info.id) {
+                    observedActiveWorkId = null
+                }
+            }
+            delay(if (info?.state?.isFinished == false) 1000 else 2500)
+        }
+    }
+
+    private suspend fun currentDownloadWorkInfo(): WorkInfo? {
+        return withContext(Dispatchers.IO) {
+            val infos = workManager.getWorkInfosForUniqueWork(MODEL_DOWNLOAD_WORK_NAME).get()
+            infos.firstOrNull { !it.state.isFinished }
+                ?: observedActiveWorkId?.let { workManager.getWorkInfoById(it).get() }
+        }
+    }
+
+    private suspend fun applyDownloadWorkInfo(info: WorkInfo) {
+        val progress = info.progress.getInt(KEY_MODEL_DOWNLOAD_PROGRESS, _state.value.downloadProgress)
+        when (info.state) {
+            WorkInfo.State.ENQUEUED,
+            WorkInfo.State.RUNNING,
+            WorkInfo.State.BLOCKED -> {
+                _state.update {
+                    it.copy(
+                        isInitialized = false,
+                        isLoading = true,
+                        error = null,
+                        downloadProgress = progress.coerceIn(0, 100)
+                    )
+                }
+            }
+            WorkInfo.State.SUCCEEDED -> {
+                if (lastFinishedWorkId != info.id) {
+                    loadDownloadedModelOnce(info.id)
+                    lastFinishedWorkId = info.id
+                }
+            }
+            WorkInfo.State.FAILED -> {
+                if (lastFinishedWorkId != info.id) {
+                    val message = info.outputData.getString(KEY_MODEL_DOWNLOAD_ERROR) ?: "모델 가져오기 실패"
+                    _state.update {
+                        it.copy(
+                            isInitialized = false,
+                            isLoading = false,
+                            error = message,
+                            downloadProgress = 0
+                        )
+                    }
+                    lastFinishedWorkId = info.id
+                }
+            }
+            WorkInfo.State.CANCELLED -> {
+                if (lastFinishedWorkId != info.id) {
+                    _state.update { it.copy(isLoading = false, downloadProgress = 0) }
+                    lastFinishedWorkId = info.id
+                }
+            }
+        }
+    }
+
+    private suspend fun loadDownloadedModelOnce(workId: UUID) {
+        loadMutex.withLock {
+            if (loadedDownloadWorkId == workId) return@withLock
+            loadModelFromDisk()
+            loadedDownloadWorkId = workId
+            _state.update {
+                it.copy(
+                    isInitialized = true,
+                    isLoading = false,
+                    error = null,
+                    downloadProgress = 100
+                )
+            }
+        }
+    }
+
     fun hasModel(): Boolean = modelFile.exists() && modelFile.length() > 0L
 
     fun modelPath(): String = modelFile.absolutePath
 
     suspend fun downloadModel() {
         _state.update { it.copy(isInitialized = false, isLoading = true, error = null, downloadProgress = 0) }
+        llama.close()
+        val request = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .build()
+
         try {
-            withContext(Dispatchers.IO) {
-                llama.close()
-                val target = findHuggingFaceModelTarget()
-                val connection = openHuggingFaceDownload(target.url)
-                try {
-                    if (connection.responseCode !in 200..299) {
-                        throw IllegalStateException("모델 다운로드 실패: ${connection.responseCode}")
-                    }
-
-                    val total = connection.contentLengthLong
-                    val tempFile = File(context.filesDir, "$MODEL_NAME.part")
-                    if (tempFile.exists()) {
-                        tempFile.delete()
-                    }
-
-                    connection.inputStream.use { input ->
-                        FileOutputStream(tempFile).use { output ->
-                            val buffer = ByteArray(64 * 1024)
-                            var read = input.read(buffer)
-                            var written = 0L
-                            while (read >= 0) {
-                                output.write(buffer, 0, read)
-                                written += read
-                                if (total > 0) {
-                                    val percent = ((written * 100) / total).toInt().coerceIn(0, 100)
-                                    _state.update { it.copy(downloadProgress = percent) }
-                                }
-                                read = input.read(buffer)
-                            }
-                        }
-                    }
-
-                    if (modelFile.exists()) {
-                        modelFile.delete()
-                    }
-                    if (!tempFile.renameTo(modelFile)) {
-                        throw IllegalStateException("모델 파일 저장에 실패했습니다.")
-                    }
-                    verifyDownloadedModelFile(modelFile, target.expectedBytes)
-                } finally {
-                    connection.disconnect()
-                }
+            enqueueDownloadWork(request)
+            val result = waitForDownloadResult(request.id)
+            if (result.state != WorkInfo.State.SUCCEEDED) {
+                val message = result.outputData.getString(KEY_MODEL_DOWNLOAD_ERROR) ?: "모델 가져오기 실패"
+                throw IllegalStateException(message)
             }
-
-            loadModelFromDisk()
-            _state.update { it.copy(isInitialized = true, isLoading = false, downloadProgress = 100) }
         } catch (err: Exception) {
             _state.update {
                 it.copy(
@@ -1690,7 +1881,11 @@ private class OfflineLlmManager(private val context: Context) {
     }
 
     suspend fun deleteModel() {
+        cancelDownloadWork()
         withContext(Dispatchers.IO) {
+            if (tempModelFile.exists()) {
+                tempModelFile.delete()
+            }
             if (modelFile.exists()) {
                 modelFile.delete()
             }
@@ -1700,11 +1895,17 @@ private class OfflineLlmManager(private val context: Context) {
     }
 
     fun close() {
+        managerScope.cancel()
         llama.close()
     }
 
     suspend fun initializeModel() {
         if (_state.value.isInitialized || _state.value.isLoading) return
+        val activeDownload = currentDownloadWorkInfo()?.takeIf { !it.state.isFinished }
+        if (activeDownload != null) {
+            applyDownloadWorkInfo(activeDownload)
+            return
+        }
 
         _state.update { it.copy(isLoading = true, error = null, downloadProgress = 0) }
 
@@ -1724,12 +1925,12 @@ private class OfflineLlmManager(private val context: Context) {
     private fun copyBundledModelIfNeeded() {
         if (hasModel()) return
 
-        val tempFile = File(context.filesDir, "$MODEL_NAME.part")
+        val tempFile = tempModelFile
         if (tempFile.exists()) {
             tempFile.delete()
         }
 
-        val total = bundledModelSize()
+        val total = bundledModelSize(context)
         try {
             context.assets.open(BUNDLED_MODEL_ASSET).use { input ->
                 FileOutputStream(tempFile).use { output ->
@@ -1766,119 +1967,6 @@ private class OfflineLlmManager(private val context: Context) {
         }
     }
 
-    private fun bundledModelSize(): Long {
-        return try {
-            context.assets.openFd(BUNDLED_MODEL_ASSET).use { descriptor ->
-                descriptor.length.takeIf { it > 0L } ?: -1L
-            }
-        } catch (_: Exception) {
-            -1L
-        }
-    }
-
-    private data class ModelDownloadTarget(
-        val fileName: String,
-        val url: URL,
-        val expectedBytes: Long?
-    )
-
-    private fun findHuggingFaceModelTarget(): ModelDownloadTarget {
-        return try {
-            val connection = (URL(HF_MODEL_API_URL).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 30000
-                readTimeout = 30000
-                setRequestProperty("User-Agent", "ResQ/1.0")
-                setRequestProperty("Accept", "application/json")
-            }
-
-            try {
-                val body = connection.inputStream.bufferedReader().use { it.readText() }
-                val siblings = JSONObject(body).optJSONArray("siblings") ?: JSONArray()
-                for (candidate in HF_MODEL_CANDIDATES) {
-                    for (index in 0 until siblings.length()) {
-                        val sibling = siblings.optJSONObject(index) ?: continue
-                        if (sibling.optString("rfilename") == candidate) {
-                            return ModelDownloadTarget(
-                                fileName = candidate,
-                                url = huggingFaceResolveUrl(candidate),
-                                expectedBytes = sibling.optLong("size", -1L).takeIf { it > 0L }
-                            )
-                        }
-                    }
-                }
-            } finally {
-                connection.disconnect()
-            }
-            fallbackHuggingFaceModelTarget()
-        } catch (err: Exception) {
-            Log.w("ResQApp-LLM", "Hugging Face 모델 목록 조회 실패, 기본 파일로 다운로드합니다: ${err.message}")
-            fallbackHuggingFaceModelTarget()
-        }
-    }
-
-    private fun fallbackHuggingFaceModelTarget(): ModelDownloadTarget {
-        val fileName = HF_MODEL_CANDIDATES.first()
-        return ModelDownloadTarget(fileName, huggingFaceResolveUrl(fileName), null)
-    }
-
-    private fun huggingFaceResolveUrl(fileName: String): URL {
-        return URL("https://huggingface.co/$HF_MODEL_REPO_ID/resolve/main/$fileName")
-    }
-
-    private fun openHuggingFaceDownload(initialUrl: URL): HttpURLConnection {
-        var currentUrl = initialUrl
-        var redirects = 0
-        while (redirects < 8) {
-            val connection = (currentUrl.openConnection() as HttpURLConnection).apply {
-                instanceFollowRedirects = false
-                connectTimeout = 60000
-                readTimeout = 120000
-                setRequestProperty("User-Agent", "ResQ/1.0")
-                setRequestProperty("Accept", "application/octet-stream")
-            }
-            val code = connection.responseCode
-            if (code in 300..399) {
-                val location = connection.getHeaderField("Location")
-                    ?: throw IllegalStateException("Hugging Face 리다이렉트 위치가 없습니다.")
-                connection.disconnect()
-                currentUrl = URL(currentUrl, location)
-                redirects += 1
-                continue
-            }
-            return connection
-        }
-        throw IllegalStateException("Hugging Face 모델 다운로드 리다이렉트가 너무 많습니다.")
-    }
-
-    private fun verifyDownloadedModelFile(file: File, expectedBytes: Long?) {
-        val minimumBytes = expectedBytes?.let { (it * 9L) / 10L } ?: MIN_HF_MODEL_BYTES
-        if (file.length() < minimumBytes) {
-            file.delete()
-            throw IllegalStateException("Hugging Face 모델 파일이 너무 작습니다. 다시 다운로드해 주세요.")
-        }
-    }
-
-    private fun verifyBundledModelFile(file: File) {
-        val actual = sha256(file)
-        if (!actual.equals(EXPECTED_BUNDLED_MODEL_SHA256, ignoreCase = true)) {
-            file.delete()
-            throw IllegalStateException("모델 파일 검증에 실패했습니다. 다시 다운로드해 주세요.")
-        }
-    }
-
-    private fun sha256(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(1024 * 1024)
-            var read = input.read(buffer)
-            while (read >= 0) {
-                digest.update(buffer, 0, read)
-                read = input.read(buffer)
-            }
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
-    }
-
     private suspend fun loadModelFromDisk() {
         val threads = Runtime.getRuntime().availableProcessors()
             .coerceAtMost(4)
@@ -1891,12 +1979,16 @@ private class OfflineLlmManager(private val context: Context) {
         }
     }
 
-    fun analyzeDisaster(text: String, language: AppLanguage): OfflineAnalysisResult? {
+    fun analyzeDisaster(
+        text: String,
+        language: AppLanguage,
+        emergencyNumber: String
+    ): OfflineAnalysisResult? {
         val quick = detectDisasterFromKeywords(text)
         return OfflineAnalysisResult(
             disasterId = quick.id,
             confidence = quick.confidence,
-            recommendation = localizedRecommendation(quick.id, language)
+            recommendation = localizedRecommendation(quick.id, language, emergencyNumber)
         )
     }
 
@@ -2003,13 +2095,6 @@ private class OfflineLlmManager(private val context: Context) {
             }
         }
     }
-
-    companion object {
-        private const val MODEL_NAME = "gemma-4-E2B-it-IQ4_XS.gguf"
-        private const val BUNDLED_MODEL_ASSET = "llm/gemma-4-E2B-it-IQ4_XS.gguf"
-        private const val EXPECTED_BUNDLED_MODEL_SHA256 = "d50db8b4573839fb4a3a5e66342bb9977da4e821992ad722974359504f1d4ed3"
-    }
-
 
 }
 
@@ -2516,6 +2601,7 @@ private fun GuidanceScreen(
     title: String?,
     statusText: String,
     warning: String?,
+    emergencyNumber: String,
     isTorchOn: Boolean,
     onBack: () -> Unit,
     onOpenDisasterPicker: () -> Unit,
@@ -2535,8 +2621,8 @@ private fun GuidanceScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     QuickActionButton(
                         iconRes = R.drawable.resq_ic_quick_phone,
-                        label = strings.call119,
-                        onClick = { open119Dialer(context) }
+                        label = emergencyNumber,
+                        onClick = { openEmergencyDialer(context, emergencyNumber) }
                     )
                     QuickActionButton(
                         iconRes = R.drawable.resq_ic_quick_flashlight,
@@ -2837,7 +2923,8 @@ private fun TextQuestionScreen(
 private suspend fun analyzeTextQueryWithLLM(
     inputText: String,
     offlineLlm: OfflineLlmManager,
-    language: AppLanguage
+    language: AppLanguage,
+    emergencyNumber: String
 ): AnalysisResult {
     // 항상 LLM으로 분석 (태그는 무시)
     return try {
@@ -2853,7 +2940,11 @@ private suspend fun analyzeTextQueryWithLLM(
         }
         AnalysisResult(
             disasterId,
-            if (language == AppLanguage.Korean) advice else localizedRecommendation(disasterId, language)
+            if (language == AppLanguage.Korean) {
+                advice.withEmergencyNumber(emergencyNumber)
+            } else {
+                localizedRecommendation(disasterId, language, emergencyNumber)
+            }
         )
     } catch (e: Exception) {
         throw IllegalStateException(e.message ?: "LLM analysis failed")
